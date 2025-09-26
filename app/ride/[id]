@@ -1,0 +1,139 @@
+import { Button } from '@/components/ui/Button';
+import { Colors } from '@/Constants/Colors';
+import { bookingService } from '@/services/bookingService';
+import { formatCurrency, formatDate, formatTime } from '@/utils/formatters';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+export default function BookRideScreen() {
+  const { id } = useLocalSearchParams();
+  const [seats, setSeats] = useState<number>(1);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const increaseSeats = () => setSeats(prev => Math.min(prev + 1, 10));
+  const decreaseSeats = () => setSeats(prev => Math.max(prev - 1, 1));
+
+  const handleConfirmBooking = async () => {
+    if (!id) {
+      Alert.alert('Error', 'Ride not found');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      const result = await bookingService.createBooking({ rideId: String(id), seats });
+      router.replace({
+        pathname: '/modal',
+        params: {
+          title: 'Booking confirmed',
+          message: 'Your seat has been reserved successfully.',
+          nextHref: '/(tabs)/home',
+        },
+      });
+    } catch (error: any) {
+      console.error('Booking error', error);
+      Alert.alert('Booking failed', error?.response?.data?.message || 'Unable to complete booking.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Confirm booking</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Seats</Text>
+        <View style={styles.seatRow}>
+          <TouchableOpacity style={styles.seatBtn} onPress={decreaseSeats} accessibilityLabel="Decrease seats">
+            <Ionicons name="remove" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+          <Text style={styles.seatCount}>{seats}</Text>
+          <TouchableOpacity style={styles.seatBtn} onPress={increaseSeats} accessibilityLabel="Increase seats">
+            <Ionicons name="add" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.actions}>
+        <Button title={`Confirm • ${formatCurrency(0)}`} onPress={handleConfirmBooking} loading={isLoading} />
+        <Text style={styles.note}>You will see the final price before payment.</Text>
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 60,
+    backgroundColor: Colors.primary,
+  },
+  backButton: {
+    marginRight: 15,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  card: {
+    backgroundColor: 'white',
+    margin: 20,
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  seatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  seatBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seatCount: {
+    fontSize: 18,
+    fontWeight: '700',
+    minWidth: 36,
+    textAlign: 'center',
+  },
+  actions: {
+    padding: 20,
+    paddingTop: 0,
+    gap: 10,
+  },
+  note: {
+    color: Colors.gray,
+    textAlign: 'center',
+  },
+});
+
+
