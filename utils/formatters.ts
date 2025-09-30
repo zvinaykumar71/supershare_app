@@ -3,10 +3,15 @@ export const formatCurrency = (amount: number): string => {
   return `₹${amount.toLocaleString('en-IN')}`;
 };
 
-export const formatDate = (date: Date): string => {
+export const formatDate = (value: Date | string): string => {
+  const date = value instanceof Date ? value : new Date(value);
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  if (!isFinite(date.getTime())) {
+    return '';
+  }
   
   if (date.toDateString() === today.toDateString()) {
     return 'Today';
@@ -21,7 +26,11 @@ export const formatDate = (date: Date): string => {
   }
 };
 
-export const formatTime = (date: Date): string => {
+export const formatTime = (value: Date | string): string => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!isFinite(date.getTime())) {
+    return '';
+  }
   return date.toLocaleTimeString('en-IN', {
     hour: '2-digit',
     minute: '2-digit',

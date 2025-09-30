@@ -16,8 +16,18 @@ import { useAuth } from '../../hooks/useAuth';
 import { useCreateRide } from '../../hooks/useRides';
 import { CreateRideData, Stop } from '../../types/api';
 
+type FormState = {
+  from: { city: string; address: string };
+  to: { city: string; address: string };
+  departureTime: string;
+  arrivalTime: string;
+  price: string;
+  availableSeats: string;
+  details: string;
+};
+
 export default function CreateRideScreen() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormState>({
     from: {
       city: '',
       address: '',
@@ -37,6 +47,19 @@ export default function CreateRideScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const createRide = useCreateRide();
   const { user } = useAuth();
+
+  const prefillExample = () => {
+    setFormData({
+      from: { city: 'Noida', address: 'Sector 62, Noida' },
+      to: { city: 'Rampur', address: 'Main City, Rampur' },
+      departureTime: '2025-10-02T15:00:00.000Z',
+      arrivalTime: '2025-10-02T16:00:00.000Z',
+      price: '600',
+      availableSeats: '3',
+      details: 'Comfortable Toyota Camry with AC',
+    });
+    setStops([{ city: 'Moradabad', address: 'Moradabad Stop' }]);
+  };
 
   // Check if user is a driver
   if (!user?.isDriver) {
@@ -60,16 +83,18 @@ export default function CreateRideScreen() {
   const handleChange = (field: string, value: string) => {
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
-      setFormData(prev => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent as keyof typeof prev],
-          [child]: value
-        }
-      }));
-    } else {
-      setFormData(prev => ({ ...prev, [field]: value }));
+      if (parent === 'from' || parent === 'to') {
+        setFormData(prev => ({
+          ...prev,
+          [parent]: {
+            ...(prev as FormState)[parent],
+            [child]: value,
+          } as FormState['from'],
+        }));
+      }
+      return;
     }
+    setFormData(prev => ({ ...prev, [field]: value } as FormState));
   };
 
   const addStop = () => {
@@ -163,6 +188,8 @@ export default function CreateRideScreen() {
 
   const handleSubmit = async () => {
 
+    console.log("vinay create ride clicked")
+
     
     if (!validateForm()) {
       return;
@@ -229,6 +256,14 @@ export default function CreateRideScreen() {
         <View style={styles.formContainer}>
           <View style={styles.form}>
             <Text style={styles.sectionTitle}>Route Information</Text>
+
+            <Button
+              title="Prefill example"
+              onPress={prefillExample}
+              variant="outline"
+              icon="cloud-download-outline"
+              style={{ marginBottom: 12 }}
+            />
             
             <Text style={styles.subsectionTitle}>From</Text>
             <Input
@@ -259,18 +294,46 @@ export default function CreateRideScreen() {
             />
 
             <Text style={styles.sectionTitle}>Schedule</Text>
-            
-            <DateTimeInput
-              placeholder="Departure Date & Time (YYYY-MM-DD HH:MM)"
-              value={formData.departureTime}
-              onChangeText={(text) => handleChange('departureTime', text)}
-            />
-            
-            <DateTimeInput
-              placeholder="Arrival Date & Time (YYYY-MM-DD HH:MM)"
-              value={formData.arrivalTime}
-              onChangeText={(text) => handleChange('arrivalTime', text)}
-            />
+
+            <Text style={styles.subsectionTitle}>Departure</Text>
+            <View style={styles.row}>
+              <View style={styles.halfWidth}>
+                <DateTimeInput
+                  placeholder="Departure Date"
+                  value={formData.departureTime}
+                  onChangeText={(text) => handleChange('departureTime', text)}
+                  mode="date"
+                />
+              </View>
+              <View style={styles.halfWidth}>
+                <DateTimeInput
+                  placeholder="Departure Time"
+                  value={formData.departureTime}
+                  onChangeText={(text) => handleChange('departureTime', text)}
+                  mode="time"
+                />
+              </View>
+            </View>
+
+            <Text style={styles.subsectionTitle}>Arrival</Text>
+            <View style={styles.row}>
+              <View style={styles.halfWidth}>
+                <DateTimeInput
+                  placeholder="Arrival Date"
+                  value={formData.arrivalTime}
+                  onChangeText={(text) => handleChange('arrivalTime', text)}
+                  mode="date"
+                />
+              </View>
+              <View style={styles.halfWidth}>
+                <DateTimeInput
+                  placeholder="Arrival Time"
+                  value={formData.arrivalTime}
+                  onChangeText={(text) => handleChange('arrivalTime', text)}
+                  mode="time"
+                />
+              </View>
+            </View>
 
             <Text style={styles.sectionTitle}>Ride Details</Text>
             

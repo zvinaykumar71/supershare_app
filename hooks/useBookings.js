@@ -26,3 +26,41 @@ export const useCancelBooking = () => {
     },
   });
 };
+
+export const useCreateBooking = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload) => bookingService.createBooking(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-bookings'] });
+    },
+  });
+};
+
+export const useAcceptBooking = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => bookingService.acceptBooking(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-bookings'] });
+    },
+  });
+};
+
+export const useRejectBooking = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => bookingService.rejectBooking(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-bookings'] });
+    },
+  });
+};
+
+export const useUpcomingBookings = () => {
+  return useQuery({
+    queryKey: ['bookings', 'upcoming'],
+    queryFn: () => bookingService.getBookings({ type: 'upcoming' }),
+  });
+};

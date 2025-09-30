@@ -11,6 +11,9 @@ interface InputProps {
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   error?: string;
   icon?: React.ReactNode;
+  multiline?: boolean;
+  numberOfLines?: number;
+  maxLength?: number;
 }
 
 export function Input({ 
@@ -21,7 +24,10 @@ export function Input({
   keyboardType = 'default',
   autoCapitalize = 'none',
   error,
-  icon 
+  icon,
+  multiline = false,
+  numberOfLines,
+  maxLength
 }: InputProps) {
   return (
     <View style={styles.container}>
@@ -36,6 +42,9 @@ export function Input({
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          maxLength={maxLength}
         />
       </View>
       {error && <Text style={styles.errorText}>{error}</Text>}

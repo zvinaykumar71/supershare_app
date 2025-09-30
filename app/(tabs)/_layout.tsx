@@ -33,11 +33,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="offers"
+        name="my-rides"
         options={{
-          title: 'My Rides',
+          title: 'Ride Detailed',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="car" color={color} size={size} />
+            <Ionicons name="list" color={color} size={size} />
           ),
         }}
       />

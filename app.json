@@ -51,6 +51,12 @@
         "projectId": "2e2d3c45-8750-412e-b130-8314be7bffd0"
       }
     },
-    "owner": "vinay71"
+    "owner": "vinay71",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2e2d3c45-8750-412e-b130-8314be7bffd0"
+    }
   }
 }

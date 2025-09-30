@@ -18,22 +18,44 @@ export default function HomeScreen() {
   });
 
   const handleSearch = () => {
+    const d = searchParams.date instanceof Date ? searchParams.date : new Date(searchParams.date as any);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const date = `${yyyy}-${mm}-${dd}`;
+
     router.push({
       pathname: '/search/results',
-      params: searchParams,
+      params: {
+        from: searchParams.from,
+        to: searchParams.to,
+        date,
+        seats: String(searchParams.passengers),
+      },
     });
   };
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>Hello{user?.name ? `, ${user.name}` : ''}</Text>
           <Text style={styles.subtitle}>Where are you going today?</Text>
+          {user?.isDriver && (
+            <View style={styles.headerButtonsContainer}>
+              <TouchableOpacity 
+                style={styles.headerButton}
+                onPress={() => router.push('/ride/create')}
+              >
+                <Ionicons name="add" size={18} color="#fff" />
+                <Text style={styles.headerButtonText}>Offer a ride</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
         <TouchableOpacity onPress={() => router.push('/profile')}>
           <Image 
-            source={{ uri: user?.avatar || 'https://picsum.photos/200' }} 
+            source={{ uri: ((user as any)?.avatar) || 'https://picsum.photos/200' }} 
             style={styles.avatar}
           />
         </TouchableOpacity>
@@ -72,15 +94,7 @@ export default function HomeScreen() {
         ))}
       </View>
 
-      {user?.isDriver && (
-        <TouchableOpacity 
-          style={styles.createRideButton}
-          onPress={() => router.push('/ride/create')}
-        >
-          <Ionicons name="add" size={24} color="white" />
-          <Text style={styles.createRideText}>Offer a ride</Text>
-        </TouchableOpacity>
-      )}
+      
     </ScrollView>
   );
 }
@@ -144,19 +158,29 @@ const styles = StyleSheet.create({
   verticalCard: {
     marginBottom: 15,
   },
-  createRideButton: {
+  headerButtonsContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  headerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
     backgroundColor: Colors.primary,
-    padding: 15,
-    borderRadius: 8,
-    margin: 20,
-    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
   },
-  createRideText: {
+  headerButtonText: {
     color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerButtonSecondary: {
+    backgroundColor: 'white',
+  },
+  headerButtonTextSecondary: {
+    color: Colors.primary,
+    fontWeight: '600',
   },
 });

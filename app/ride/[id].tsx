@@ -1,14 +1,56 @@
+import { BookingRequestCard } from '@/components/shared/BookingRequestCard';
 import { Button } from '@/components/ui/Button';
 import { Colors } from '@/Constants/Colors';
-import { rides } from '@/data/mockData';
+import { useAuth } from '@/hooks/useAuth';
+import { useAcceptBooking, useRejectBooking, useUserBookings } from '@/hooks/useBookings';
+import { useRide } from '@/hooks/useRides';
 import { formatCurrency, formatDate, formatTime } from '@/utils/formatters';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo } from 'react';
 import { Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function RideDetailScreen() {
   const { id } = useLocalSearchParams();
-  const ride = rides.find(r => r.id === id);
+  const rideId = Array.isArray(id) ? id[0] : id?.toString();
+  console.log('ride/[id]: id =', rideId);
+  const { data: ride, isLoading } = useRide(rideId || '');
+  const { user } = useAuth();
+  const { data: bookingsData } = useUserBookings();
+  
+  // Get booking requests for this specific ride
+  const bookingRequests = useMemo(() => {
+    if (!bookingsData?.asDriver || !rideId) return [];
+    return (bookingsData.asDriver || []).filter((booking: any) => 
+      booking.ride?._id === rideId && booking.status === 'pending'
+    );
+  }, [bookingsData, rideId]);
+  
+  // Check if current user is the driver of this ride
+  const isDriver = user?.isDriver && ride?.driver?.id === user?.id;
+  
+  const { mutate: acceptBooking, isPending: isAccepting } = useAcceptBooking();
+  const { mutate: rejectBooking, isPending: isRejecting } = useRejectBooking();
+  
+  const handleAccept = (bookingId: string) => {
+    acceptBooking(bookingId as any);
+  };
+  
+  const handleReject = (bookingId: string) => {
+    rejectBooking(bookingId as any);
+  };
+
+
+  
+
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <Text style={{ color: 'white' }}>Loading...</Text>
+      </View>
+    );
+  }
 
   if (!ride) {
     return (
@@ -19,7 +61,7 @@ export default function RideDetailScreen() {
   }
 
   const handleBookRide = () => {
-    router.push(`/ride/${ride.id}/book`);
+    router.push({ pathname: '/ride/book', params: { id: ride.id } });
   };
 
   const handleContactDriver = () => {
@@ -124,6 +166,40 @@ export default function RideDetailScreen() {
           <Text style={styles.contactText}>Contact driver</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Booking Requests Section - Only show for drivers */}
+      {isDriver && (
+        <View style={styles.bookingRequestsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Booking Requests</Text>
+            <View style={styles.requestCount}>
+              <Text style={styles.requestCountText}>{bookingRequests.length}</Text>
+            </View>
+          </View>
+          
+          {bookingRequests.length === 0 ? (
+            <View style={styles.emptyRequests}>
+              <Ionicons name="people-outline" size={48} color={Colors.gray} />
+              <Text style={styles.emptyRequestsText}>No pending requests</Text>
+              <Text style={styles.emptyRequestsSubtext}>When passengers request to book your ride, you'll see them here</Text>
+            </View>
+          ) : (
+            <View style={styles.requestsList}>
+              {bookingRequests.map((booking: any) => (
+                <BookingRequestCard
+                  key={booking.id}
+                  booking={booking}
+                  onAccept={handleAccept}
+                  onReject={handleReject}
+                  isAccepting={isAccepting}
+                  isRejecting={isRejecting}
+                  style={styles.requestCard}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      )}
 
       <View style={styles.actions}>
         <Button 
@@ -321,5 +397,64 @@ const styles = StyleSheet.create({
   },
   bookButton: {
     marginBottom: 30,
+  },
+  bookingRequestsSection: {
+    backgroundColor: 'white',
+    margin: 20,
+    marginTop: 0,
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  requestCount: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  requestCountText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  emptyRequests: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyRequestsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  emptyRequestsSubtext: {
+    fontSize: 14,
+    color: Colors.gray,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  requestsList: {
+    gap: 12,
+  },
+  requestCard: {
+    marginBottom: 0,
   },
 });

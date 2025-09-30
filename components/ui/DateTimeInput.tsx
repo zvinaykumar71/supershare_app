@@ -9,13 +9,15 @@ interface DateTimeInputProps {
   value: string;
   onChangeText: (text: string) => void;
   error?: string;
+  mode?: 'date' | 'time' | 'datetime';
 }
 
 export function DateTimeInput({ 
   placeholder, 
   value, 
   onChangeText, 
-  error 
+  error,
+  mode = 'datetime',
 }: DateTimeInputProps) {
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
 
@@ -31,6 +33,25 @@ export function DateTimeInput({
   };
 
   const handleConfirm = (selectedDate: Date) => {
+    // For 'date' or 'time', merge with existing value parts so we keep the other part intact
+    if (mode !== 'datetime' && value) {
+      const current = new Date(value);
+      const merged = new Date(current);
+      if (mode === 'date') {
+        merged.setFullYear(selectedDate.getFullYear());
+        merged.setMonth(selectedDate.getMonth());
+        merged.setDate(selectedDate.getDate());
+      } else if (mode === 'time') {
+        merged.setHours(selectedDate.getHours());
+        merged.setMinutes(selectedDate.getMinutes());
+        merged.setSeconds(0);
+        merged.setMilliseconds(0);
+      }
+      onChangeText(merged.toISOString());
+      setDatePickerVisibility(false);
+      return;
+    }
+
     onChangeText(selectedDate.toISOString());
     setDatePickerVisibility(false);
   };
@@ -39,27 +60,58 @@ export function DateTimeInput({
   if (Platform.OS === 'web') {
     return (
       <View style={styles.container}>
-        <input
-          type="datetime-local"
-          value={value ? new Date(value).toISOString().slice(0, 16) : ''}
-          onChange={(e) => {
-            if (e.target.value) {
-              onChangeText(new Date(e.target.value).toISOString());
-            }
-          }}
-          placeholder={placeholder}
-          style={{
-            width: '100%',
-            height: 50,
-            padding: '0 16px',
-            border: `1px solid ${error ? Colors.danger : Colors.border}`,
-            borderRadius: 8,
-            fontSize: 16,
-            backgroundColor: Colors.card,
-            fontFamily: 'inherit',
-            outline: 'none',
-          }}
-        />
+        {mode === 'date' && (
+          <input
+            type="date"
+            value={value ? new Date(value).toISOString().slice(0, 10) : ''}
+            onChange={(e) => {
+              if (e.target.value) {
+                const [yyyy, mm, dd] = e.target.value.split('-').map(Number);
+                const base = value ? new Date(value) : new Date();
+                const merged = new Date(base);
+                merged.setFullYear(yyyy);
+                merged.setMonth(mm - 1);
+                merged.setDate(dd);
+                onChangeText(merged.toISOString());
+              }
+            }}
+            placeholder={placeholder}
+            style={webInputStyle(error)}
+          />
+        )}
+        {mode === 'time' && (
+          <input
+            type="time"
+            value={value ? new Date(value).toISOString().slice(11, 16) : ''}
+            onChange={(e) => {
+              if (e.target.value) {
+                const [hh, mi] = e.target.value.split(':').map(Number);
+                const base = value ? new Date(value) : new Date();
+                const merged = new Date(base);
+                merged.setHours(hh);
+                merged.setMinutes(mi);
+                merged.setSeconds(0);
+                merged.setMilliseconds(0);
+                onChangeText(merged.toISOString());
+              }
+            }}
+            placeholder={placeholder}
+            style={webInputStyle(error)}
+          />
+        )}
+        {mode === 'datetime' && (
+          <input
+            type="datetime-local"
+            value={value ? new Date(value).toISOString().slice(0, 16) : ''}
+            onChange={(e) => {
+              if (e.target.value) {
+                onChangeText(new Date(e.target.value).toISOString());
+              }
+            }}
+            placeholder={placeholder}
+            style={webInputStyle(error)}
+          />
+        )}
         {error && <Text style={styles.errorText}>{error}</Text>}
       </View>
     );
@@ -82,7 +134,7 @@ export function DateTimeInput({
       
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
-        mode="datetime"
+        mode={mode}
         date={value ? new Date(value) : new Date()}
         onConfirm={handleConfirm}
         onCancel={() => setDatePickerVisibility(false)}
@@ -127,3 +179,15 @@ const styles = StyleSheet.create({
     marginLeft: 16,
   },
 });
+
+const webInputStyle = (error?: string) => ({
+  width: '100%',
+  height: 50,
+  padding: '0 16px',
+  border: `1px solid ${error ? Colors.danger : Colors.border}`,
+  borderRadius: 8,
+  fontSize: 16,
+  backgroundColor: Colors.card,
+  fontFamily: 'inherit',
+  outline: 'none',
+} as React.CSSProperties);

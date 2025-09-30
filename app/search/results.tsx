@@ -1,36 +1,41 @@
 import { RideCard } from '@/components/shared/RideCard';
 import { Colors } from '@/Constants/Colors';
-import { filters, rides } from '@/data/mockData';
+import { filters } from '@/data/mockData';
+import { useRides } from '@/hooks/useRides';
 import { formatDate } from '@/utils/formatters';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function SearchResultsScreen() {
   const params = useLocalSearchParams();
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
-  const [sortedRides, setSortedRides] = useState(rides);
 
-  useEffect(() => {
-    // Filter and sort rides based on search parameters
-    let results = rides.filter(ride => 
-      ride.from.city.toLowerCase().includes(params.from?.toString().toLowerCase() || '') &&
-      ride.to.city.toLowerCase().includes(params.to?.toString().toLowerCase() || '')
-    );
+  const searchParams = useMemo(() => {
+    return {
+      from: params.from as string,
+      to: params.to as string,
+      date: params.date as string, // already formatted YYYY-MM-DD
+      seats: Number(params.seats ?? 1),
+    } as any;
+  }, [params]);
 
-    // Apply filters
+  const { data: rides = [], isLoading } = useRides(searchParams);
+
+  const sortedRides = useMemo(() => {
+    let results = rides;
     if (activeFilters.length > 0) {
-      results = results.filter(ride => {
-        if (activeFilters.includes('verified') && !ride.driver.isVerified) return false;
-        if (activeFilters.includes('instant') && !ride.instantBooking) return false;
-        if (activeFilters.includes('womenOnly') && !ride.womenOnly) return false;
+      results = results.filter((ride: any) => {
+        if (activeFilters.includes('verified') && !ride.driver?.isVerified) return false;
+        // instant / womenOnly flags may not exist in API; ignore unless present
+        if (activeFilters.includes('instant') && (ride as any).instantBooking === false) return false;
+        if (activeFilters.includes('womenOnly') && (ride as any).womenOnly === false) return false;
         return true;
       });
     }
-
-    setSortedRides(results);
-  }, [params, activeFilters]);
+    return results;
+  }, [rides, activeFilters]);
 
   const toggleFilter = (filterId: string) => {
     setActiveFilters(prev =>
@@ -51,7 +56,7 @@ export default function SearchResultsScreen() {
             {params.from} → {params.to}
           </Text>
           <Text style={styles.date}>
-            {formatDate(new Date(params.date as string))} • {params.passengers} passenger{params.passengers !== '1' ? 's' : ''}
+            {formatDate(new Date(params.date as string))} • {params.seats} seat{params.seats !== '1' ? 's' : ''}
           </Text>
         </View>
       </View>
@@ -82,26 +87,34 @@ export default function SearchResultsScreen() {
       </ScrollView>
 
       <ScrollView style={styles.resultsContainer}>
-        <Text style={styles.resultsCount}>
-          {sortedRides.length} ride{sortedRides.length !== 1 ? 's' : ''} found
-        </Text>
-
-        {sortedRides.map(ride => (
-          <RideCard 
-            key={ride.id} 
-            ride={ride} 
-            onPress={() => router.push(`/ride/${ride.id}`)}
-          />
-        ))}
-
-        {sortedRides.length === 0 && (
-          <View style={styles.noResults}>
-            <Ionicons name="search" size={48} 
-            color={Colors.gray}
-             />
-            <Text style={styles.noResultsText}>No rides found</Text>
-            <Text style={styles.noResultsSubtext}>Try adjusting your search criteria</Text>
+        {isLoading ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
           </View>
+        ) : (
+          <>
+            <Text style={styles.resultsCount}>
+              {sortedRides.length} ride{sortedRides.length !== 1 ? 's' : ''} found
+            </Text>
+
+            {sortedRides.map((ride: any) => (
+              <RideCard 
+                key={ride.id} 
+                ride={ride} 
+                onPress={() => router.push(`/ride/${ride.id}`)}
+              />
+            ))}
+
+            {sortedRides.length === 0 && (
+              <View style={styles.noResults}>
+                <Ionicons name="search" size={48} 
+                color={Colors.gray}
+                 />
+                <Text style={styles.noResultsText}>No rides found</Text>
+                <Text style={styles.noResultsSubtext}>Try adjusting your search criteria</Text>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -185,5 +198,8 @@ const styles = StyleSheet.create({
   noResultsSubtext: {
     color: Colors.gray,
     textAlign: 'center',
+  },
+  loaderContainer: {
+    padding: 40,
   },
 });

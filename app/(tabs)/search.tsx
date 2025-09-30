@@ -22,9 +22,20 @@ export default function SearchScreen() {
   ];
 
   const handleSearch = () => {
+    const d = searchParams.date instanceof Date ? searchParams.date : new Date(searchParams.date as any);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const date = `${yyyy}-${mm}-${dd}`;
+
     router.push({
       pathname: '/search/results',
-      params: searchParams,
+      params: {
+        from: searchParams.from,
+        to: searchParams.to,
+        date,
+        seats: String(searchParams.passengers),
+      },
     });
   };
 

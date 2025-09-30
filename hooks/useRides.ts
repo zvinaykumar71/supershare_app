@@ -25,6 +25,28 @@ export const useUserRides = () => {
   });
 };
 
+export const useAllRides = () => {
+  return useQuery({
+    queryKey: ['all-rides'],
+    queryFn: () => rideService.getAllRides(),
+  });
+};
+
+export const useDriverRides = () => {
+  // Backend returns rides offered by the authenticated driver at GET /rides
+  return useQuery({
+    queryKey: ['driver-rides'],
+    queryFn: () => rideService.getAllRides(),
+  });
+};
+
+export const useUserBookings = () => {
+  return useQuery({
+    queryKey: ['user-bookings'],
+    queryFn: () => rideService.getUserBookings(),
+  });
+};
+
 export const useCreateRide = () => {
   const queryClient = useQueryClient();
   

@@ -1,6 +1,8 @@
 // components/shared/SearchForm.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { Colors } from '../../Constants/Colors';
 import { formatDate } from '../../utils/formatters';
 
@@ -16,6 +18,8 @@ interface SearchFormProps {
 }
 
 export function SearchForm({ values, onChange, onSubmit }: SearchFormProps) {
+  const [isDatePickerVisible, setDatePickerVisible] = useState(false);
+
   const swapLocations = () => {
     onChange({
       ...values,
@@ -59,18 +63,83 @@ export function SearchForm({ values, onChange, onSubmit }: SearchFormProps) {
       </View>
       
       <View style={styles.optionsContainer}>
-        <TouchableOpacity style={styles.option}>
-          <Ionicons name="calendar" size={20} color={Colors.primary} />
-          <Text style={styles.optionText}>{formatDate(values.date)}</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.option}>
+        {/* Date selector */}
+        {Platform.OS === 'web' ? (
+          <View style={[styles.option, { paddingRight: 12 }]}>
+            <Ionicons name="calendar" size={20} color={Colors.primary} />
+            <input
+              type="date"
+              value={(() => {
+                const d = values.date instanceof Date ? values.date : new Date(values.date as any);
+                if (!isFinite(d.getTime())) return '';
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+              })()}
+              onChange={(e) => {
+                const v = e.target.value; // YYYY-MM-DD
+                const parts = v.split('-');
+                const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                onChange({ ...values, date });
+              }}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                fontSize: 16,
+                color: Colors.primary,
+                marginLeft: 6,
+              }}
+            />
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.option}
+            onPress={() => setDatePickerVisible(true)}
+          >
+            <Ionicons name="calendar" size={20} color={Colors.primary} />
+            <Text style={styles.optionText}>{formatDate(values.date)}</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Passenger stepper */}
+        <View style={styles.passengerOption}>
           <Ionicons name="people" size={20} color={Colors.primary} />
-          <Text style={styles.optionText}>
-            {values.passengers} passenger{values.passengers !== 1 ? 's' : ''}
-          </Text>
-        </TouchableOpacity>
+          <View style={styles.stepper}>
+            <TouchableOpacity
+              style={[styles.stepButton, values.passengers <= 1 && styles.stepButtonDisabled]}
+              disabled={values.passengers <= 1}
+              onPress={() => onChange({ ...values, passengers: Math.max(1, values.passengers - 1) })}
+            >
+              <Ionicons name="remove" size={18} color={values.passengers <= 1 ? Colors.gray : Colors.primary} />
+            </TouchableOpacity>
+            <Text style={styles.passengerCount}>{values.passengers}</Text>
+            <TouchableOpacity
+              style={[styles.stepButton, values.passengers >= 8 && styles.stepButtonDisabled]}
+              disabled={values.passengers >= 8}
+              onPress={() => onChange({ ...values, passengers: Math.min(8, values.passengers + 1) })}
+            >
+              <Ionicons name="add" size={18} color={values.passengers >= 8 ? Colors.gray : Colors.primary} />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
+
+      {/* Native date picker modal */}
+      {Platform.OS !== 'web' && (
+        <DateTimePickerModal
+          isVisible={isDatePickerVisible}
+          mode="date"
+          date={values.date instanceof Date ? values.date : new Date(values.date as any)}
+          onConfirm={(d) => {
+            onChange({ ...values, date: d });
+            setDatePickerVisible(false);
+          }}
+          onCancel={() => setDatePickerVisible(false)}
+          is24Hour={true}
+        />
+      )}
       
       <TouchableOpacity 
         style={styles.searchButton}
@@ -137,9 +206,43 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     gap: 6,
   },
+  passengerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    backgroundColor: Colors.lightPrimary,
+    borderRadius: 6,
+    gap: 8,
+  },
   optionText: {
     color: Colors.primary,
     fontWeight: '500',
+  },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stepButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+  },
+  stepButtonDisabled: {
+    borderColor: Colors.lightGray,
+    backgroundColor: Colors.lightGray,
+  },
+  passengerCount: {
+    minWidth: 20,
+    textAlign: 'center',
+    color: Colors.primary,
+    fontWeight: '600',
   },
   searchButton: {
     flexDirection: 'row',
