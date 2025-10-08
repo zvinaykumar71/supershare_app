@@ -38,6 +38,7 @@ const mapRide = (r) => {
 export const rideService = {
   getAllRides: async () => {
     const response = await api.get('/rides');
+    console.log(response ,"<== backend responce==>")
     const rides = response.data?.rides || [];
     return rides.map(mapRide);
   },
@@ -70,10 +71,28 @@ export const rideService = {
     const response = await api.get('/rides/my-bookings');
     const bookings = response.data?.rides || response.data || [];
     return bookings.map(mapRide);
+    
   },
 
   bookRide: async (rideId, seats) => {
     const response = await api.post(`/rides/${rideId}/book`, { seats });
     return response.data;
   },
+
+  getRideBookingRequests: async (rideId, seats) => {
+    const response = await api.get(`/rides/${rideId}/booking-requests`);
+    return response.data;
+  },
+
+
+  getDriverCurrentRide: async (rideId, seats) => {
+    const response = await api.get(`/rides/driver/current`);
+    return response.data;
+  }
+
+  
+
 };
+
+
+

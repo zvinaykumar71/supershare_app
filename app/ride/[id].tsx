@@ -3,46 +3,129 @@ import { Button } from '@/components/ui/Button';
 import { Colors } from '@/Constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
 import { useAcceptBooking, useRejectBooking, useUserBookings } from '@/hooks/useBookings';
-import { useRide } from '@/hooks/useRides';
+import { useRide, useRideBookingRequests } from '@/hooks/useRides';
 import { formatCurrency, formatDate, formatTime } from '@/utils/formatters';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
-import { Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+
 
 export default function RideDetailScreen() {
   const { id } = useLocalSearchParams();
   const rideId = Array.isArray(id) ? id[0] : id?.toString();
   console.log('ride/[id]: id =', rideId);
+  
   const { data: ride, isLoading } = useRide(rideId || '');
   const { user } = useAuth();
-  const { data: bookingsData } = useUserBookings();
   
-  // Get booking requests for this specific ride
-  const bookingRequests = useMemo(() => {
-    if (!bookingsData?.asDriver || !rideId) return [];
-    return (bookingsData.asDriver || []).filter((booking: any) => 
-      booking.ride?._id === rideId && booking.status === 'pending'
-    );
-  }, [bookingsData, rideId]);
+  // Use the actual booking requests API for this specific ride
+  const { data: bookingRequestsData, isLoading: isLoadingRequests } = useRideBookingRequests(rideId || '');
+
+  console.log("vinay here is booking request data==>",bookingRequestsData)
+  
+  // Get user's own bookings (for passenger view)
+  const { data: bookingsData } = useUserBookings();
   
   // Check if current user is the driver of this ride
   const isDriver = user?.isDriver && ride?.driver?.id === user?.id;
   
+  // Get user's booking for this ride (if passenger has booked)
+  const userBooking = useMemo(() => {
+    if (!bookingsData?.asPassenger || !rideId) return null;
+    return (bookingsData.asPassenger || []).find((booking: any) => 
+      booking.ride?._id === rideId
+    );
+  }, [bookingsData, rideId]);
+
   const { mutate: acceptBooking, isPending: isAccepting } = useAcceptBooking();
   const { mutate: rejectBooking, isPending: isRejecting } = useRejectBooking();
   
+  // const handleAccept = (bookingId: string) => {
+  //   acceptBooking(bookingId as any);
+  // };
+
   const handleAccept = (bookingId: string) => {
-    acceptBooking(bookingId as any);
+    Alert.alert(
+      "Accept Booking Request",
+      "Are you sure you want to accept this booking request?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Accept",
+          onPress: () => {
+            acceptBooking(bookingId, {
+              onSuccess: (data) => {
+                console.log('Booking accepted successfully:', data);
+                // The query invalidation in the hook will automatically refresh the data
+                Alert.alert("Success", "Booking request accepted successfully!");
+              },
+              onError: (error: any) => {
+                console.error('Error accepting booking:', error);
+                const errorMessage = error.response?.data?.message || 'Failed to accept booking request';
+                Alert.alert("Error", errorMessage);
+              }
+            });
+          }
+        }
+      ]
+    );
   };
+
   
+  
+  // const handleReject = (bookingId: string) => {
+  //   rejectBooking(bookingId as any);
+  // };
+
+
   const handleReject = (bookingId: string) => {
-    rejectBooking(bookingId as any);
+    Alert.alert(
+      "Reject Booking Request",
+      "Are you sure you want to reject this booking request?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Reject",
+          style: "destructive",
+          onPress: () => {
+            rejectBooking(bookingId, {
+              onSuccess: (data) => {
+                console.log('Booking rejected successfully:', data);
+                // The query invalidation in the hook will automatically refresh the data
+                Alert.alert("Success", "Booking request rejected successfully!");
+              },
+              onError: (error: any) => {
+                console.error('Error rejecting booking:', error);
+                const errorMessage = error.response?.data?.message || 'Failed to reject booking request';
+                Alert.alert("Error", errorMessage);
+              }
+            });
+          }
+        }
+      ]
+    );
   };
 
 
-  
 
+  const handleBookRide = () => {
+    router.push({ pathname: '/ride/book', params: { id: ride?.id } });
+
+  };
+
+  const handleContactDriver = () => {
+    if (ride?.driver?.phone) {
+      Linking.openURL(`tel:${ride.driver.phone}`);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -55,18 +138,10 @@ export default function RideDetailScreen() {
   if (!ride) {
     return (
       <View style={styles.container}>
-        <Text>Ride not found</Text>
+        <Text style={{ color: 'white' }}>Ride not found</Text>
       </View>
     );
   }
-
-  const handleBookRide = () => {
-    router.push({ pathname: '/ride/book', params: { id: ride.id } });
-  };
-
-  const handleContactDriver = () => {
-    Linking.openURL(`tel:${ride.driver.phone}`);
-  };
 
   return (
     <ScrollView style={styles.container}>
@@ -109,23 +184,17 @@ export default function RideDetailScreen() {
         
         <View style={styles.rideInfo}>
           <View style={styles.infoItem}>
-            <Ionicons name="calendar" size={20}
-            color={Colors.gray}
-              />
+            <Ionicons name="calendar" size={20} color={Colors.gray} />
             <Text style={styles.infoText}>{formatDate(ride.date)}</Text>
           </View>
           
           <View style={styles.infoItem}>
-            <Ionicons name="pricetag" size={20} 
-            color={Colors.gray}
-             />
+            <Ionicons name="pricetag" size={20} color={Colors.gray} />
             <Text style={styles.infoText}>{formatCurrency(ride.price)} per seat</Text>
           </View>
           
           <View style={styles.infoItem}>
-            <Ionicons name="people" size={20}
-            color={Colors.gray} 
-             />
+            <Ionicons name="people" size={20} color={Colors.gray} />
             <Text style={styles.infoText}>{ride.availableSeats} of {ride.totalSeats} seats available</Text>
           </View>
         </View>
@@ -137,9 +206,7 @@ export default function RideDetailScreen() {
           <View style={styles.driverInfo}>
             <Text style={styles.driverName}>{ride.driver.name}</Text>
             <View style={styles.rating}>
-              <Ionicons name="star" size={16} 
-              color={Colors.warning}
-               />
+              <Ionicons name="star" size={16} color={Colors.warning} />
               <Text style={styles.ratingText}>{ride.driver.rating} • {ride.driver.trips} trips</Text>
             </View>
           </View>
@@ -153,19 +220,54 @@ export default function RideDetailScreen() {
         <Text style={styles.driverBio}>{ride.driver.bio}</Text>
         
         <View style={styles.carInfo}>
-          <Ionicons name="car" size={20}
-          color={Colors.gray}
-           />
+          <Ionicons name="car" size={20} color={Colors.gray} />
           <Text style={styles.carText}>{ride.car.model} • {ride.car.color} • {ride.car.plate}</Text>
         </View>
         
         <TouchableOpacity style={styles.contactButton} onPress={handleContactDriver}>
-          <Ionicons name="call" size={20}
-          color={Colors.primary} 
-           />
+          <Ionicons name="call" size={20} color={Colors.primary} />
           <Text style={styles.contactText}>Contact driver</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Booking Status Section - Show for passengers who have booked this ride */}
+      {!isDriver && userBooking && (
+        <View style={styles.bookingStatusSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Your Booking</Text>
+            <View style={[
+              styles.statusBadge,
+              userBooking.status === 'confirmed' && styles.statusConfirmed,
+              userBooking.status === 'pending' && styles.statusPending,
+              userBooking.status === 'rejected' && styles.statusRejected,
+              userBooking.status === 'cancelled' && styles.statusCancelled,
+            ]}>
+              <Text style={styles.statusText}>
+                {userBooking.status?.charAt(0).toUpperCase() + userBooking.status?.slice(1)}
+              </Text>
+            </View>
+          </View>
+          
+          <View style={styles.bookingDetails}>
+            <View style={styles.bookingDetailItem}>
+              <Text style={styles.bookingDetailLabel}>Seats booked:</Text>
+              <Text style={styles.bookingDetailValue}>{userBooking.seats}</Text>
+            </View>
+            <View style={styles.bookingDetailItem}>
+              <Text style={styles.bookingDetailLabel}>Total price:</Text>
+              <Text style={styles.bookingDetailValue}>{formatCurrency(userBooking.totalPrice)}</Text>
+            </View>
+            <View style={styles.bookingDetailItem}>
+              <Text style={styles.bookingDetailLabel}>Pickup:</Text>
+              <Text style={styles.bookingDetailValue}>{userBooking.pickupPoint}</Text>
+            </View>
+            <View style={styles.bookingDetailItem}>
+              <Text style={styles.bookingDetailLabel}>Dropoff:</Text>
+              <Text style={styles.bookingDetailValue}>{userBooking.dropoffPoint}</Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Booking Requests Section - Only show for drivers */}
       {isDriver && (
@@ -173,11 +275,17 @@ export default function RideDetailScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Booking Requests</Text>
             <View style={styles.requestCount}>
-              <Text style={styles.requestCountText}>{bookingRequests.length}</Text>
+              <Text style={styles.requestCountText}>
+                {isLoadingRequests ? '...' : bookingRequestsData?.totalRequests || 0}
+              </Text>
             </View>
           </View>
           
-          {bookingRequests.length === 0 ? (
+          {isLoadingRequests ? (
+            <View style={styles.loadingRequests}>
+              <Text style={styles.loadingText}>Loading requests...</Text>
+            </View>
+          ) : bookingRequestsData?.bookingRequests?.length === 0 ? (
             <View style={styles.emptyRequests}>
               <Ionicons name="people-outline" size={48} color={Colors.gray} />
               <Text style={styles.emptyRequestsText}>No pending requests</Text>
@@ -185,9 +293,9 @@ export default function RideDetailScreen() {
             </View>
           ) : (
             <View style={styles.requestsList}>
-              {bookingRequests.map((booking: any) => (
+              {bookingRequestsData?.bookingRequests?.map((booking: any) => (
                 <BookingRequestCard
-                  key={booking.id}
+                  key={booking._id}
                   booking={booking}
                   onAccept={handleAccept}
                   onReject={handleReject}
@@ -201,13 +309,16 @@ export default function RideDetailScreen() {
         </View>
       )}
 
-      <View style={styles.actions}>
-        <Button 
-          title={`Book seat • ${formatCurrency(ride.price)}`}
-          onPress={handleBookRide}
-          style={styles.bookButton}
-        />
-      </View>
+      {/* Book Button - Only show for passengers who haven't booked this ride */}
+      {!isDriver && !userBooking && (
+        <View style={styles.actions}>
+          <Button 
+            title={`Book seat • ${formatCurrency(ride.price)}`}
+            onPress={handleBookRide}
+            style={styles.bookButton}
+          />
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -398,6 +509,18 @@ const styles = StyleSheet.create({
   bookButton: {
     marginBottom: 30,
   },
+  bookingStatusSection: {
+    backgroundColor: 'white',
+    margin: 20,
+    marginTop: 0,
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   bookingRequestsSection: {
     backgroundColor: 'white',
     margin: 20,
@@ -421,6 +544,45 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.text,
   },
+  statusBadge: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  statusConfirmed: {
+    backgroundColor: Colors.success,
+  },
+  statusPending: {
+    backgroundColor: Colors.warning,
+  },
+  statusRejected: {
+    backgroundColor: Colors.error,
+  },
+  statusCancelled: {
+    backgroundColor: Colors.gray,
+  },
+  statusText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  bookingDetails: {
+    gap: 8,
+  },
+  bookingDetailItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bookingDetailLabel: {
+    color: Colors.gray,
+    fontSize: 14,
+  },
+  bookingDetailValue: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
   requestCount: {
     backgroundColor: Colors.primary,
     borderRadius: 12,
@@ -433,6 +595,14 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  loadingRequests: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  loadingText: {
+    color: Colors.gray,
+    fontSize: 14,
   },
   emptyRequests: {
     alignItems: 'center',

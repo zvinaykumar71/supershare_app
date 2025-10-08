@@ -62,4 +62,24 @@ export const useBookRide = () => {
   return useMutation({
     mutationFn: ({ rideId, seats }: { rideId: string; seats: number }) => rideService.bookRide(rideId, seats),
   });
+  
 };
+
+
+
+export const useRideBookingRequests = (rideId: string) => {
+  return useQuery({
+    queryKey: ['ride-booking-requests', rideId],
+    queryFn: () => rideService.getRideBookingRequests(rideId),
+    enabled: !!rideId, // Only fetch when rideId is available
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+};
+
+
+export const useCurrentRideRequests = () => {
+  return useQuery({
+    queryKey: ['current-ride-requests'],
+    queryFn: () => rideService.getDriverCurrentRide(),
+  });
+}

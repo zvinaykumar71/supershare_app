@@ -2,8 +2,11 @@ import { BookingCard } from '@/components/shared/BookingCard';
 import { BookingRequestCard } from '@/components/shared/BookingRequestCard';
 import { RideCard } from '@/components/shared/RideCard';
 import { Colors } from '@/Constants/Colors';
-import { useAcceptBooking, useRejectBooking, useUserBookings } from '@/hooks/useBookings';
-import { useDriverRides } from '@/hooks/useRides';
+import { useAcceptBooking, usePassengerBookingRequests, useRejectBooking, useUserBookings } from '@/hooks/useBookings';
+// import { useCurrentRideRequests } from '@/hooks/useCurrentRideRequests';
+// import { usePassengerBookingRequests } from '@/hooks/usePassengerBookingRequests';
+import { PassengerBookingCard } from '@/components/shared/PassengerBookingCard';
+import { useCurrentRideRequests, useDriverRides } from '@/hooks/useRides';
 import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -14,18 +17,36 @@ export default function MyRidesScreen() {
 
   // Offered rides for drivers should call GET /rides (driver's own offers)
   const { data: offeredRides = [], isLoading: isLoadingOffered, refetch: refetchOffered, isRefetching: isRefetchingOffered } = useDriverRides();
-  const { data: bookingsData, isLoading: isLoadingBooked, refetch: refetchBooked, isRefetching: isRefetchingBooked } = useUserBookings();
+  const { data:  bookingsData, isLoading: isLoadingBooked, refetch: refetchBooked, isRefetching: isRefetchingBooked } = useUserBookings();
+  const { data: currentRideData, isLoading: isLoadingCurrentRide, refetch: refetchCurrentRide, isRefetching: isRefetchingCurrentRide } = useCurrentRideRequests();
   const bookedRides = useMemo(() => bookingsData?.asPassenger || [], [bookingsData]);
   const driverRequests = useMemo(() => (bookingsData?.asDriver || []).filter((b: any) => b.status === 'pending'), [bookingsData]);
+  const currentRideRequests = currentRideData?.bookingRequests || [];
 
-  const [activeTab, setActiveTab] = useState<'offered' | 'booked' | 'requests'>(user?.isDriver ? 'offered' : 'booked');
+  // Add passenger requests hook
+  const { data: passengerRequestsData, isLoading: isLoadingPassengerRequests, refetch: refetchPassengerRequests, isRefetching: isRefetchingPassengerRequests } = usePassengerBookingRequests();
+  const passengerRequests = passengerRequestsData?.bookingRequests || [];
+
+  const [activeTab, setActiveTab] = useState<'offered' | 'booked' | 'requests' | 'passengerRequests'>(user?.isDriver ? 'offered' : 'booked');
   const [refreshing, setRefreshing] = useState(false);
 
   const isDriver = !!user?.isDriver;
 
-  const isLoading = activeTab === 'offered' ? isLoadingOffered : isLoadingBooked;
-  const rides = useMemo(() => (activeTab === 'offered' ? offeredRides : bookedRides), [activeTab, offeredRides, bookedRides]);
-  const isRefetching = activeTab === 'offered' ? isRefetchingOffered : isRefetchingBooked;
+  const isLoading = activeTab === 'offered'
+    ? isLoadingOffered
+    : activeTab === 'booked'
+    ? isLoadingBooked
+    : activeTab === 'requests'
+    ? isLoadingCurrentRide
+    : isLoadingPassengerRequests;
+
+  const isRefetching = activeTab === 'offered'
+    ? isRefetchingOffered
+    : activeTab === 'booked'
+    ? isRefetchingBooked
+    : activeTab === 'requests'
+    ? isRefetchingCurrentRide
+    : isRefetchingPassengerRequests;
 
   const { mutate: acceptBooking, isPending: isAccepting } = useAcceptBooking();
   const { mutate: rejectBooking, isPending: isRejecting } = useRejectBooking();
@@ -43,13 +64,17 @@ export default function MyRidesScreen() {
     try {
       if (activeTab === 'offered') {
         await refetchOffered();
-      } else {
+      } else if (activeTab === 'booked') {
         await refetchBooked();
+      } else if (activeTab === 'requests') {
+        await refetchCurrentRide();
+      } else {
+        await refetchPassengerRequests();
       }
     } finally {
       setRefreshing(false);
     }
-  }, [activeTab, refetchBooked, refetchOffered]);
+  }, [activeTab, refetchBooked, refetchOffered, refetchCurrentRide, refetchPassengerRequests]);
 
   return (
     <ScrollView style={styles.container}
@@ -72,9 +97,12 @@ export default function MyRidesScreen() {
         )}
         {!isDriver && (
           <View style={styles.tabsContainer}>
-            <View style={[styles.tabButton, styles.tabButtonActive]}>
-              <Text style={[styles.tabText, styles.tabTextActive]}>Booked</Text>
-            </View>
+            <TouchableOpacity onPress={() => setActiveTab('booked')} style={[styles.tabButton, activeTab === 'booked' && styles.tabButtonActive]}>
+              <Text style={[styles.tabText, activeTab === 'booked' && styles.tabTextActive]}>Booked</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setActiveTab('passengerRequests')} style={[styles.tabButton, activeTab === 'passengerRequests' && styles.tabButtonActive]}>
+              <Text style={[styles.tabText, activeTab === 'passengerRequests' && styles.tabTextActive]}>Requests</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -83,10 +111,24 @@ export default function MyRidesScreen() {
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      ) : (activeTab === 'offered' ? offeredRides.length === 0 : activeTab === 'booked' ? bookedRides.length === 0 : driverRequests.length === 0) ? (
+      ) : (activeTab === 'offered'
+        ? offeredRides.length === 0
+        : activeTab === 'booked'
+        ? bookedRides.length === 0
+        : activeTab === 'requests'
+        ? currentRideRequests.length === 0
+        : passengerRequests.length === 0) ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyTitle}>No rides yet</Text>
-          <Text style={styles.emptySubtitle}>{activeTab === 'offered' ? 'Create your first ride to see it here.' : activeTab === 'booked' ? 'Book your first ride to see it here.' : 'No pending requests right now.'}</Text>
+          <Text style={styles.emptySubtitle}>
+            {activeTab === 'offered'
+              ? 'Create your first ride to see it here.'
+              : activeTab === 'booked'
+              ? 'Book your first ride to see it here.'
+              : activeTab === 'requests'
+              ? 'No pending requests right now.'
+              : 'No booking requests yet.'}
+          </Text>
           {activeTab === 'offered' && isDriver && (
             <TouchableOpacity style={styles.ctaButton} onPress={() => router.push('/ride/create')}>
               <Text style={styles.ctaText}>Offer a ride</Text>
@@ -111,7 +153,7 @@ export default function MyRidesScreen() {
           )}
           {activeTab === 'requests' && (
             <>
-              {driverRequests.map((booking: any) => (
+              {currentRideRequests.map((booking: any) => (
                 <BookingRequestCard
                   key={booking.id}
                   booking={booking}
@@ -120,6 +162,18 @@ export default function MyRidesScreen() {
                   onReject={handleReject}
                   isAccepting={isAccepting}
                   isRejecting={isRejecting}
+                />
+              ))}
+            </>
+          )}
+          {activeTab === 'passengerRequests' && (
+            <>
+              {passengerRequests.map((booking: any) => (
+                <PassengerBookingCard
+                  key={booking.id}
+                  booking={booking}
+                  style={styles.card}
+                  // Optionally, add cancel handler here if needed
                 />
               ))}
             </>
