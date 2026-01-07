@@ -155,10 +155,18 @@ export function BookingRequestCard({
       </View>
 
       {ride.availableSeats !== undefined && (
-        <View style={styles.seatInfo}>
-          <Text style={styles.seatInfoText}>
-            Available seats: {ride.availableSeats} | Booked seats: {ride.bookedSeats || 0}
-          </Text>
+        <View style={styles.seatInfoContainer}>
+          <View style={styles.seatInfoItem}>
+            <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+            <Text style={styles.seatInfoLabel}>Available:</Text>
+            <Text style={[styles.seatInfoValue, { color: Colors.success }]}>{ride.availableSeats}</Text>
+          </View>
+          <View style={styles.seatInfoDivider} />
+          <View style={styles.seatInfoItem}>
+            <Ionicons name="people" size={16} color={Colors.primary} />
+            <Text style={styles.seatInfoLabel}>Booked:</Text>
+            <Text style={[styles.seatInfoValue, { color: Colors.primary }]}>{ride.bookedSeats || 0}</Text>
+          </View>
         </View>
       )}
 
@@ -320,16 +328,33 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
   },
-  seatInfo: {
+  seatInfoContainer: {
+    flexDirection: 'row',
     backgroundColor: Colors.lightGray,
-    padding: 8,
+    padding: 10,
     borderRadius: 8,
     marginBottom: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  seatInfoText: {
+  seatInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  seatInfoLabel: {
     fontSize: 12,
     color: Colors.gray,
-    textAlign: 'center',
+  },
+  seatInfoValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  seatInfoDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: Colors.gray,
+    marginHorizontal: 12,
   },
   pointsRow: {
     flexDirection: 'row',

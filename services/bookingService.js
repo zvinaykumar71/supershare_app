@@ -48,10 +48,10 @@ export const bookingService = {
 
   /**
    * Cancel a booking as passenger
-   * API: POST /bookings/:id/cancel
+   * API: PUT /bookings/:id/cancel
    */
   cancelBooking: async (id) => {
-    const response = await api.post(`/bookings/${id}/cancel`);
+    const response = await api.put(`/bookings/${id}/cancel`);
     return response.data;
   },
 
@@ -89,22 +89,41 @@ export const bookingService = {
 
   /**
    * Accept a booking request as driver
-   * API: POST /bookings/:id/accept
+   * API: PUT /bookings/:id/respond
+   * Body: { action: 'accept' }
    * Returns: Updated booking
    */
   acceptBooking: async (id) => {
-    const response = await api.post(`/bookings/${id}/accept`);
-    return response.data;
+    
+    try {
+      const response = await api.put(`/bookings/${id}/respond`, { action: 'accept' });
+      return response.data;
+    } catch (error) {
+      console.error('=== ACCEPT BOOKING ERROR ===');
+      console.error('Status:', error.response?.status);
+      console.error('Error Data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('Error Message:', error.message);
+      throw error;
+    }
   },
 
   /**
    * Reject a booking request as driver
-   * API: POST /bookings/:id/reject
+   * API: PUT /bookings/:id/respond
+   * Body: { action: 'reject' }
    * Returns: Updated booking
    */
   rejectBooking: async (id) => {
-    const response = await api.post(`/bookings/${id}/reject`);
-    return response.data;
+    try {
+      const response = await api.put(`/bookings/${id}/respond`, { action: 'reject' });
+      return response.data;
+    } catch (error) {
+      console.error('=== REJECT BOOKING ERROR ===');
+      console.error('Status:', error.response?.status);
+      console.error('Error Data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('Error Message:', error.message);
+      throw error;
+    }
   },
 
   /**

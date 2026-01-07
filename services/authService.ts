@@ -13,7 +13,15 @@ export const authService = {
   },
 
   logout: async (): Promise<void> => {
-    await api.post('/auth/logout');
+    try {
+      await api.post('/auth/logout');
+    } catch (error: any) {
+      // Ignore 404 errors - backend might not have logout endpoint
+      // Local logout will still happen in the auth hook
+      if (error?.response?.status !== 404) {
+        throw error;
+      }
+    }
   },
 
   forgotPassword: async (email: string): Promise<void> => {

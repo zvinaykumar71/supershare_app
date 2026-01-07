@@ -21,7 +21,40 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
 
+# macOS
+.DS_Store
+*.pem
 
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+.env*.local
 
+# typescript
+*.tsbuildinfo
 
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build outputs
+build/
+*.apk
+*.aab
+*.ipa
+
+# Logs
+logs/
+*.log
+
+# Testing
+coverage/

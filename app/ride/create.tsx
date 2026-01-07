@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -47,6 +48,7 @@ export default function CreateRideScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const createRide = useCreateRide();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const prefillExample = () => {
     setFormData({
@@ -188,8 +190,6 @@ export default function CreateRideScreen() {
 
   const handleSubmit = async () => {
 
-    console.log("vinay create ride clicked")
-
     
     if (!validateForm()) {
       return;
@@ -214,20 +214,38 @@ export default function CreateRideScreen() {
         details: formData.details.trim() || undefined,
       };
 
-      console.log("ride data==>",rideData)
 
-      await createRide.mutateAsync(rideData);
+      const result = await createRide.mutateAsync(rideData);
       
-      Alert.alert(
-        'Success!', 
-        'Your ride has been created successfully and is now available for booking.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/(tabs)/home')
-          }
-        ]
-      );
+      // Invalidate the driver-active-ride query to switch to driver mode
+      queryClient.invalidateQueries({ queryKey: ['driver-active-ride'] });
+      queryClient.invalidateQueries({ queryKey: ['user-rides'] });
+      queryClient.invalidateQueries({ queryKey: ['driver-rides'] });
+
+      setTimeout(() => {
+        Alert.alert(
+          'Success!', 
+          'Your ride has been created successfully. You are now in Driver Mode.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                router.replace('/(tabs)/home');
+              }
+            }
+          ]
+        );
+      }, 100);
+      // Alert.alert(
+      //   'Success!', 
+      //   'Your ride has been created successfully and is now available for booking.',
+      //   [
+      //     {
+      //       text: 'OK',
+      //       onPress: () => router.replace('/(tabs)/home')
+      //     }
+      //   ]
+      // );
     } catch (error: any) {
       console.error('Create ride error:', error);
       Alert.alert(

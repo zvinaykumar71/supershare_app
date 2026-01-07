@@ -1,11 +1,13 @@
 import { Colors } from '@/Constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserMode } from '@/hooks/useDriverActiveRide';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const { mode, hasActiveRide, activeRide, showDriverFeatures, canOfferRide, isDriver } = useUserMode();
 
   const handleLogout = async () => {
     await logout();
@@ -47,7 +49,8 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Colors.gray} />
         </TouchableOpacity>
         
-        {!user?.isDriver && (
+        {/* Show "Become a Driver" option for non-drivers */}
+        {!isDriver && (
           <TouchableOpacity 
             style={styles.menuItem}
             onPress={() => router.push('/(auth)/become-driver')}
@@ -58,22 +61,64 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
         
-        {user?.isDriver && (
+        {/* DRIVER WITH ACTIVE RIDE: Show driver mode status */}
+        {showDriverFeatures && (
           <>
-            <TouchableOpacity style={styles.menuItem}>
-              <Ionicons name="car" size={24} color="#00A2FF" />
-              <Text style={[styles.menuText, { color: '#00A2FF' }]}>Driver Mode Active</Text>
-              <Ionicons name="checkmark-circle" size={20} color="#00A2FF" />
-            </TouchableOpacity>
+            <View style={styles.modeStatusItem}>
+              <Ionicons name="car" size={24} color={Colors.primary} />
+              <View style={styles.modeStatusContent}>
+                <Text style={[styles.menuText, { color: Colors.primary }]}>Driver Mode Active</Text>
+                <Text style={styles.modeStatusSubtext}>You have an active ride</Text>
+              </View>
+              <View style={styles.modeStatusBadge}>
+                <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+              </View>
+            </View>
+            
+            {activeRide && (
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => router.push(`/ride/${activeRide.id || activeRide._id}`)}
+              >
+                <Ionicons name="navigate" size={24} color={Colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.menuText}>View Active Ride</Text>
+                  <Text style={styles.menuSubtext}>
+                    {activeRide.from?.city || 'Origin'} → {activeRide.to?.city || 'Destination'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={Colors.gray} />
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+        
+        {/* DRIVER WITHOUT ACTIVE RIDE: Show passenger mode with option to offer ride */}
+        {isDriver && !showDriverFeatures && (
+          <>
+            <View style={styles.modeStatusItem}>
+              <Ionicons name="person" size={24} color={Colors.success} />
+              <View style={styles.modeStatusContent}>
+                <Text style={[styles.menuText, { color: Colors.success }]}>Passenger Mode</Text>
+                <Text style={styles.modeStatusSubtext}>You can search and book rides</Text>
+              </View>
+              <View style={styles.modeStatusBadge}>
+                <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+              </View>
+            </View>
             
             <TouchableOpacity 
-              style={styles.menuItem}
+              style={[styles.menuItem, styles.offerRideItem]}
               onPress={() => router.push('/ride/create')}
             >
-              <Ionicons name="add-circle-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuText}>Create a Ride</Text>
-              <Ionicons name="chevron-forward" size={20} color={Colors.gray} />
+              <Ionicons name="add-circle" size={24} color="#fff" />
+              <Text style={[styles.menuText, { color: '#fff' }]}>Offer a New Ride</Text>
+              <Ionicons name="chevron-forward" size={20} color="#fff" />
             </TouchableOpacity>
+            
+            <Text style={styles.modeHint}>
+              💡 When you create a ride, you'll switch to Driver Mode
+            </Text>
           </>
         )}
         
@@ -178,6 +223,48 @@ const styles = StyleSheet.create({
   menuText: {
     flex: 1,
     fontSize: 16,
+  },
+  menuSubtext: {
+    fontSize: 12,
+    color: Colors.gray,
+    marginTop: 2,
+  },
+  modeStatusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 16,
+    backgroundColor: Colors.lightPrimary,
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+    marginVertical: 4,
+    borderRadius: 8,
+  },
+  modeStatusContent: {
+    flex: 1,
+  },
+  modeStatusSubtext: {
+    fontSize: 12,
+    color: Colors.gray,
+    marginTop: 2,
+  },
+  modeStatusBadge: {
+    padding: 4,
+  },
+  offerRideItem: {
+    backgroundColor: Colors.success,
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+    marginVertical: 4,
+    borderRadius: 8,
+  },
+  modeHint: {
+    fontSize: 12,
+    color: Colors.gray,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 4,
   },
   logoutButton: {
     flexDirection: 'row',

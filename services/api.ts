@@ -5,27 +5,43 @@ import { Platform } from 'react-native';
 
 // Resolve base URL: prefer EXPO_PUBLIC_API_URL, otherwise infer from dev host
 function resolveBaseUrl(): string {
+  // 1. Check environment variable first
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // Try to infer host from Expo dev server
-  const hostUri: string | undefined =
-    (Constants as any)?.expoConfig?.hostUri ||
-    (Constants as any)?.manifest2?.extra?.expoGo?.developer?.host ||
-    (Constants as any)?.manifest?.debuggerHost;
+  // 2. Check app.json extra config for apiHost
+  const configuredHost = Constants.expoConfig?.extra?.apiHost;
+  if (configuredHost) {
+    return `http://${configuredHost}:9000/api`;
+  }
+
+  // 3. Try to detect from Expo dev server
+  let hostUri: string | undefined;
+  try {
+    hostUri = 
+      Constants.expoConfig?.hostUri ||
+      (Constants as any)?.manifest2?.extra?.expoGo?.developer?.host ||
+      (Constants as any)?.manifest?.debuggerHost ||
+      (Constants as any)?.manifest?.hostUri;
+  } catch (e) {
+    console.log('Error getting hostUri:', e);
+  }
 
   let host = 'localhost';
+  
   if (hostUri) {
+    // Extract just the IP/hostname, removing any port
     host = hostUri.split(':')[0];
   }
 
-  // Android emulator cannot reach localhost; use 10.0.2.2
+  // For Android emulator, use 10.0.2.2 to reach host machine
   if (Platform.OS === 'android' && (host === 'localhost' || host === '127.0.0.1')) {
     host = '10.0.2.2';
   }
 
-  return `http://${host}:9000/api`;
+  const baseUrl = `http://${host}:9000/api`;
+  return baseUrl;
 }
 
 const BASE_URL = resolveBaseUrl();

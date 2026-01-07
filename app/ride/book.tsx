@@ -6,7 +6,7 @@ import { formatCurrency } from '@/utils/formatters';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function BookRideScreen() {
   const params = useLocalSearchParams();
@@ -60,10 +60,13 @@ export default function BookRideScreen() {
       Alert.alert('Error', e?.response?.data?.message || e?.message || 'Failed to send booking request');
     }
   };
-
+  // mmmmmmmmmm
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
+      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
         <Text style={styles.title}>Request booking</Text>
         {ride && (
           <Text style={styles.price}>{formatCurrency(ride.price)} per seat</Text>

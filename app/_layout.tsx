@@ -11,13 +11,18 @@ export default function RootLayout() {
         <AuthProvider>
           <StatusBar style="auto" />
           <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="search" options={{ presentation: 'modal' }} />
-            <Stack.Screen name="ride" options={{ presentation: 'card' }} />
-            <Stack.Screen name="bookings" options={{ presentation: 'card' }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="notifications/index" options={{ headerShown: false }} />
+            <Stack.Screen name="ride/[id]" options={{ presentation: 'card' }} />
+            <Stack.Screen name="ride/active" options={{ presentation: 'card' }} />
+            <Stack.Screen name="ride/book" options={{ presentation: 'card' }} />
+            <Stack.Screen name="ride/create" options={{ presentation: 'card' }} />
+            <Stack.Screen name="ride/my-rides" options={{ presentation: 'card' }} />
+            <Stack.Screen name="ride/tracking" options={{ presentation: 'card' }} />
+            <Stack.Screen name="search/results" options={{ presentation: 'modal' }} />
           </Stack>
         </AuthProvider>
       </QueryProvider>

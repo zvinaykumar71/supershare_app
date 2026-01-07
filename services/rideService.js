@@ -16,7 +16,10 @@ const mapRide = (r) => {
     arrivalTime: r.arrivalTime,
     price: r.price,
     availableSeats: r.availableSeats,
-    totalSeats: r.availableSeats,
+    bookedSeats: r.bookedSeats || 0,
+    totalSeats: r.totalSeats || r.availableSeats + (r.bookedSeats || 0),
+    rideStatus: r.rideStatus || 'scheduled',
+    currentLocation: r.currentLocation,
     stops: r.stops || [],
     details: r.details || '',
     driver: {
@@ -27,9 +30,15 @@ const mapRide = (r) => {
       trips: r.driver?.reviewsCount ?? 0,
       isVerified: true,
       bio: '',
-      phone: '',
+      phone: r.driver?.phone || '',
+      vehicle: r.driver?.vehicle || null,
     },
-    car: { make: '', model: '', color: '', plate: '' },
+    car: r.driver?.vehicle ? {
+      make: r.driver.vehicle.make || '',
+      model: r.driver.vehicle.model || '',
+      color: r.driver.vehicle.color || '',
+      plate: r.driver.vehicle.licensePlate || ''
+    } : { make: '', model: '', color: '', plate: '' },
     duration,
     date: r.departureTime,
   };
@@ -38,16 +47,43 @@ const mapRide = (r) => {
 export const rideService = {
   getAllRides: async () => {
     const response = await api.get('/rides');
-    console.log(response ,"<== backend responce==>")
     const rides = response.data?.rides || [];
     return rides.map(mapRide);
   },
 
   searchRides: async (params) => {
-    // Backend: GET /rides?from=..&to=..&date=YYYY-MM-DD&seats=1
-    const response = await api.get('/rides', { params });
-    const rides = response.data?.rides || response.data || [];
-    return rides.map(mapRide);
+    // Backend: GET /rides/search?from=..&to=..&date=YYYY-MM-DD&seats=1
+    
+    // Build search params - trim and handle case
+    const searchParams = {
+      ...(params.from && { from: params.from.trim() }),
+      ...(params.to && { to: params.to.trim() }),
+      ...(params.date && { date: params.date }),
+      ...(params.seats && { seats: params.seats }),
+    };
+    
+    
+    try {
+      // Try dedicated search endpoint first
+      const response = await api.get('/rides/search', { params: searchParams });
+      const rides = response.data?.rides || response.data || [];
+      return rides.map(mapRide);
+    } catch (error) {
+      console.log('Search endpoint failed, trying /rides/available:', error.message);
+      
+      try {
+        // Try /rides/available endpoint
+        const response = await api.get('/rides/available', { params: searchParams });
+        const rides = response.data?.rides || response.data || [];
+        return rides.map(mapRide);
+      } catch (error2) {
+        
+        // Fallback to /rides with query params
+        const response = await api.get('/rides', { params: searchParams });
+        const rides = response.data?.rides || response.data || [];
+        return rides.map(mapRide);
+      }
+    }
   },
 
   getRide: async (id) => {
@@ -85,13 +121,35 @@ export const rideService = {
   },
 
 
-  getDriverCurrentRide: async (rideId, seats) => {
+  getDriverCurrentRide: async () => {
     const response = await api.get(`/rides/driver/current`);
     return response.data;
+  },
+
+  // Get all available rides for passengers to book
+  getAvailableRides: async (params = {}) => {
+    // Try different endpoints that might return available rides
+    const endpoints = [
+      '/rides/search',
+      '/rides/available', 
+      '/rides/all',
+      '/rides'
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        const response = await api.get(endpoint, { params });
+        const rides = response.data?.rides || response.data || [];
+        if (Array.isArray(rides)) {
+          return rides.map(mapRide);
+        }
+      } catch (error) {
+        console.log(`${endpoint} failed:`, error.message);
+      }
+    }
+    
+    return [];
   }
-
-  
-
 };
 
 

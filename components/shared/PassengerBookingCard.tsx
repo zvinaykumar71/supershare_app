@@ -1,11 +1,13 @@
 import { Colors } from '@/Constants/Colors';
 import { formatCurrency, formatDate, formatTime } from '@/utils/formatters';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type BookingRequest = {
   id: string;
+  _id?: string;
   status: string;
   seats: number;
   totalPrice?: number;
@@ -21,6 +23,7 @@ type BookingRequest = {
   };
   passenger?: { _id?: string; name?: string };
   ride?: {
+    _id?: string;
     from?: { city?: string; address?: string };
     to?: { city?: string; address?: string };
     departureTime?: string;
@@ -28,6 +31,7 @@ type BookingRequest = {
     price?: number;
     availableSeats?: number;
     bookedSeats?: number;
+    rideStatus?: string;
     driver?: {
       _id: string;
       name: string;
@@ -61,6 +65,7 @@ interface PassengerBookingCardProps {
   onCancel?: (id: string) => void;
   onRate?: (id: string) => void;
   style?: any;
+  showStatus?: boolean;
 }
 
 export function PassengerBookingCard({
@@ -68,6 +73,7 @@ export function PassengerBookingCard({
   onCancel,
   onRate,
   style,
+  showStatus = true,
 }: PassengerBookingCardProps) {
   const ride = booking.ride || {};
   const driver = ride.driver;
@@ -77,6 +83,7 @@ export function PassengerBookingCard({
   const getStatusColor = () => {
     switch (booking.status) {
       case 'accepted':
+      case 'confirmed':
         return Colors.success;
       case 'rejected':
         return Colors.danger;
@@ -94,6 +101,7 @@ export function PassengerBookingCard({
   const getStatusIcon = () => {
     switch (booking.status) {
       case 'accepted':
+      case 'confirmed':
         return 'checkmark-circle';
       case 'rejected':
         return 'close-circle';
@@ -121,8 +129,62 @@ export function PassengerBookingCard({
     }
   };
 
+  const getRideStatusColor = () => {
+    switch (ride.rideStatus) {
+      case 'in_progress':
+        return Colors.success;
+      case 'scheduled':
+        return Colors.warning;
+      case 'completed':
+        return Colors.primary;
+      case 'cancelled':
+        return Colors.danger;
+      default:
+        return Colors.gray;
+    }
+  };
+
+  const getRideStatusText = () => {
+    switch (ride.rideStatus) {
+      case 'in_progress':
+        return 'Ride In Progress';
+      case 'scheduled':
+        return 'Scheduled';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return ride.rideStatus || 'Unknown';
+    }
+  };
+
+  const isRideInProgress = ride.rideStatus === 'in_progress';
+  const canTrackRide = (booking.status === 'confirmed' || booking.status === 'accepted') && isRideInProgress;
+
+  const handleTrackRide = () => {
+    const rideId = ride._id || booking.id || booking._id;
+    if (rideId) {
+      router.push({ pathname: '/ride/tracking', params: { id: rideId } });
+    }
+  };
+
   return (
     <View style={[styles.container, style]}>
+      {/* Ride Status Banner - Show when ride is in progress */}
+      {isRideInProgress && (booking.status === 'confirmed' || booking.status === 'accepted') && (
+        <View style={styles.rideStatusBanner}>
+          <View style={styles.rideStatusLeft}>
+            <View style={styles.liveDot} />
+            <Text style={styles.rideStatusText}>RIDE IN PROGRESS</Text>
+          </View>
+          <TouchableOpacity style={styles.trackButton} onPress={handleTrackRide}>
+            <Ionicons name="location" size={16} color="#fff" />
+            <Text style={styles.trackButtonText}>Track</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Header with Status */}
       <View style={styles.header}>
         <View style={styles.statusContainer}>
@@ -351,6 +413,49 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     marginVertical: 4,
+    overflow: 'hidden',
+  },
+  rideStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.success,
+    marginHorizontal: -16,
+    marginTop: -16,
+    marginBottom: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  rideStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  rideStatusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  trackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  trackButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',
