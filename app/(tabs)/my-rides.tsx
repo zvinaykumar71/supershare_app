@@ -58,6 +58,17 @@ export default function MyRidesScreen() {
     return allActiveRides.some((b: any) => b.ride?.rideStatus === 'in_progress');
   }, [allActiveRides]);
 
+  // Set default tab based on mode
+  // Driver with active ride: show 'requests' tab by default
+  // Driver without active ride or regular user: show 'activeRides' tab by default
+  const getDefaultTab = () => {
+    if (showDriverFeatures) return 'requests';
+    return 'activeRides';
+  };
+
+  const [activeTab, setActiveTab] = useState<'offered' | 'booked' | 'requests' | 'passengerRequests' | 'activeRides'>(getDefaultTab());
+  const [refreshing, setRefreshing] = useState(false);
+
   // Polling for real-time updates when ride is in progress
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -77,17 +88,6 @@ export default function MyRidesScreen() {
       }
     };
   }, [activeTab, hasRideInProgress, refetchBooked, refetchPassengerRequests]);
-
-  // Set default tab based on mode
-  // Driver with active ride: show 'requests' tab by default
-  // Driver without active ride or regular user: show 'activeRides' tab by default
-  const getDefaultTab = () => {
-    if (showDriverFeatures) return 'requests';
-    return 'activeRides';
-  };
-
-  const [activeTab, setActiveTab] = useState<'offered' | 'booked' | 'requests' | 'passengerRequests' | 'activeRides'>(getDefaultTab());
-  const [refreshing, setRefreshing] = useState(false);
 
   const isDriver = !!user?.isDriver;
 

@@ -14,36 +14,88 @@ export default function ProfileScreen() {
     router.replace('/(auth)/login');
   };
 
+  // Format rating display
+  const displayRating = user?.rating ? user.rating.toFixed(1) : '0.0';
+  const reviewCount = user?.reviewsCount || 0;
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Image
-          source={{ uri: user?.avatar || 'https://picsum.photos/200' }}
+          source={{ uri: user?.profilePicture || user?.avatar || 'https://picsum.photos/200' }}
           style={styles.avatar}
         />
         <Text style={styles.name}>{user?.name || 'User Name'}</Text>
-        <Text style={styles.bio}>Mobile developer | React Native enthusiast</Text>
+        
+        {/* User type badge */}
+        <View style={styles.userTypeBadge}>
+          <Ionicons 
+            name={isDriver ? 'car' : 'person'} 
+            size={14} 
+            color={isDriver ? Colors.primary : Colors.success} 
+          />
+          <Text style={[styles.userTypeText, { color: isDriver ? Colors.primary : Colors.success }]}>
+            {isDriver ? 'Driver' : 'Passenger'}
+          </Text>
+        </View>
+        
+        {/* Rating display */}
+        <View style={styles.ratingContainer}>
+          <Ionicons name="star" size={18} color="#FFD700" />
+          <Text style={styles.ratingText}>{displayRating}</Text>
+          <Text style={styles.reviewCount}>({reviewCount} reviews)</Text>
+        </View>
         
         <View style={styles.stats}>
-          <View style={styles.stat}>
-            <Text style={styles.statNumber}>245</Text>
-            <Text style={styles.statLabel}>Friends</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={styles.statNumber}>12</Text>
-            <Text style={styles.statLabel}>Groups</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={styles.statNumber}>1.2K</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </View>
+          {isDriver ? (
+            // Driver stats
+            <>
+              <View style={styles.stat}>
+                <Ionicons name="car" size={20} color={Colors.primary} style={styles.statIcon} />
+                <Text style={styles.statNumber}>0</Text>
+                <Text style={styles.statLabel}>Rides Given</Text>
+              </View>
+              <View style={styles.stat}>
+                <Ionicons name="people" size={20} color={Colors.success} style={styles.statIcon} />
+                <Text style={styles.statNumber}>0</Text>
+                <Text style={styles.statLabel}>Passengers</Text>
+              </View>
+              <View style={styles.stat}>
+                <Ionicons name="location" size={20} color={Colors.secondary} style={styles.statIcon} />
+                <Text style={styles.statNumber}>0 km</Text>
+                <Text style={styles.statLabel}>Distance</Text>
+              </View>
+            </>
+          ) : (
+            // Passenger stats
+            <>
+              <View style={styles.stat}>
+                <Ionicons name="navigate" size={20} color={Colors.primary} style={styles.statIcon} />
+                <Text style={styles.statNumber}>0</Text>
+                <Text style={styles.statLabel}>Rides Taken</Text>
+              </View>
+              <View style={styles.stat}>
+                <Ionicons name="location" size={20} color={Colors.success} style={styles.statIcon} />
+                <Text style={styles.statNumber}>0 km</Text>
+                <Text style={styles.statLabel}>Distance</Text>
+              </View>
+              <View style={styles.stat}>
+                <Ionicons name="leaf" size={20} color="#4CAF50" style={styles.statIcon} />
+                <Text style={styles.statNumber}>0 kg</Text>
+                <Text style={styles.statLabel}>CO₂ Saved</Text>
+              </View>
+            </>
+          )}
         </View>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
         
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity 
+          style={styles.menuItem}
+          onPress={() => router.push('/edit-profile')}
+        >
           <Ionicons name="person-outline" size={24} color={Colors.text} />
           <Text style={styles.menuText}>Edit Profile</Text>
           <Ionicons name="chevron-forward" size={20} color={Colors.gray} />
@@ -146,7 +198,7 @@ export default function ProfileScreen() {
         
         <TouchableOpacity style={styles.menuItem}>
           <Ionicons name="information-circle-outline" size={24} color={Colors.text} />
-          <Text style={styles.menuText}>About BlaBla</Text>
+          <Text style={styles.menuText}>About SuperShare</Text>
           <Ionicons name="chevron-forward" size={20} color={Colors.gray} />
         </TouchableOpacity>
       </View>
@@ -174,34 +226,69 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    marginBottom: 16,
+    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: Colors.primary,
   },
   name: {
     fontSize: 24,
     fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  userTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.lightPrimary,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
     marginBottom: 8,
   },
-  bio: {
+  userTypeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 20,
+  },
+  ratingText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  reviewCount: {
+    fontSize: 14,
     color: Colors.gray,
-    textAlign: 'center',
-    marginBottom: 24,
   },
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
   },
   stat: {
     alignItems: 'center',
+    flex: 1,
+  },
+  statIcon: {
+    marginBottom: 4,
   },
   statNumber: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 2,
+    color: Colors.text,
   },
   statLabel: {
     color: Colors.gray,
-    fontSize: 14,
+    fontSize: 12,
+    textAlign: 'center',
   },
   section: {
     padding: 16,

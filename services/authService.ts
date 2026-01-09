@@ -1,4 +1,4 @@
-import { AuthResponse, DriverData, LoginCredentials, RegisterData } from '../types/api';
+import { AuthResponse, DriverData, LoginCredentials, RegisterData, UpdateProfileData, User } from '../types/api';
 import { api } from './api';
 
 export const authService = {
@@ -34,6 +34,16 @@ export const authService = {
 
   becomeDriver: async (driverData: DriverData): Promise<AuthResponse> => {
     const response = await api.post('/auth/become-driver', driverData);
+    return response.data;
+  },
+
+  getProfile: async (): Promise<User> => {
+    const response = await api.get('/auth/me');
+    return response.data;
+  },
+
+  updateProfile: async (profileData: UpdateProfileData): Promise<{ message: string; user: User }> => {
+    const response = await api.put('/auth/profile', profileData);
     return response.data;
   },
 };

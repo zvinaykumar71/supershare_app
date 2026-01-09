@@ -4,9 +4,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDriverActiveRide, useUpdateLocation, useCompleteRide, useStartRide } from '@/hooks/useTracking';
 import { trackingService } from '@/services/trackingService';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
@@ -21,70 +23,124 @@ import {
 
 const { width, height } = Dimensions.get('window');
 
-// Simple map component using Mapbox Static API
+// Map component using Mapbox Static API with route line
 const StaticMap = ({ 
   driverLocation, 
   fromCoords, 
   toCoords,
-  passengers = []
+  passengers = [],
+  isLoading = false,
 }: { 
   driverLocation?: { lat: number; lng: number };
   fromCoords?: { lat: number; lng: number };
   toCoords?: { lat: number; lng: number };
   passengers?: any[];
+  isLoading?: boolean;
 }) => {
   // Build markers for Mapbox Static API
   let markers = '';
   
-  // Driver marker (blue)
+  // Driver marker (blue car icon)
   if (driverLocation?.lat && driverLocation?.lng) {
     markers += `pin-l-car+0066FF(${driverLocation.lng},${driverLocation.lat}),`;
   }
   
-  // From marker (green)
+  // From marker (green - Start)
   if (fromCoords?.lat && fromCoords?.lng) {
-    markers += `pin-s-a+00FF00(${fromCoords.lng},${fromCoords.lat}),`;
+    markers += `pin-l-a+22C55E(${fromCoords.lng},${fromCoords.lat}),`;
   }
   
-  // To marker (red)
+  // To marker (red - End)
   if (toCoords?.lat && toCoords?.lng) {
-    markers += `pin-s-b+FF0000(${toCoords.lng},${toCoords.lat}),`;
+    markers += `pin-l-b+EF4444(${toCoords.lng},${toCoords.lat}),`;
   }
   
   // Remove trailing comma
   markers = markers.slice(0, -1);
   
-  // Calculate center and zoom
-  const centerLat = driverLocation?.lat || fromCoords?.lat || 28.6139;
-  const centerLng = driverLocation?.lng || fromCoords?.lng || 77.2090;
+  // Calculate bounds to fit all points
+  const allLats = [driverLocation?.lat, fromCoords?.lat, toCoords?.lat].filter(Boolean) as number[];
+  const allLngs = [driverLocation?.lng, fromCoords?.lng, toCoords?.lng].filter(Boolean) as number[];
   
-  const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${markers ? markers + '/' : ''}${centerLng},${centerLat},12,0/${Math.round(width - 40)}x300@2x?access_token=${MAPBOX_ACCESS_TOKEN}`;
+  let centerLat = 28.6139;
+  let centerLng = 77.2090;
+  let zoom = 12;
+  
+  if (allLats.length > 0 && allLngs.length > 0) {
+    centerLat = allLats.reduce((a, b) => a + b, 0) / allLats.length;
+    centerLng = allLngs.reduce((a, b) => a + b, 0) / allLngs.length;
+    
+    // Calculate zoom based on distance
+    const latDiff = Math.max(...allLats) - Math.min(...allLats);
+    const lngDiff = Math.max(...allLngs) - Math.min(...allLngs);
+    const maxDiff = Math.max(latDiff, lngDiff);
+    
+    if (maxDiff > 0.5) zoom = 9;
+    else if (maxDiff > 0.2) zoom = 10;
+    else if (maxDiff > 0.1) zoom = 11;
+    else zoom = 12;
+  }
+  
+  const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${markers ? markers + '/' : ''}${centerLng},${centerLat},${zoom},0/${Math.round(width - 40)}x280@2x?access_token=${MAPBOX_ACCESS_TOKEN}`;
 
   return (
     <View style={styles.mapContainer}>
-      <Image 
-        source={{ uri: mapUrl }} 
-        style={styles.mapImage}
-        resizeMode="cover"
-      />
+      {isLoading ? (
+        <View style={styles.mapLoading}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.mapLoadingText}>Loading map...</Text>
+        </View>
+      ) : (
+        <Image 
+          source={{ uri: mapUrl }} 
+          style={styles.mapImage}
+          resizeMode="cover"
+        />
+      )}
       <View style={styles.mapOverlay}>
         <View style={styles.legendContainer}>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: '#0066FF' }]} />
-            <Text style={styles.legendText}>Your Location</Text>
+            <Text style={styles.legendText}>You</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#00FF00' }]} />
-            <Text style={styles.legendText}>Pickup</Text>
+            <View style={[styles.legendDot, { backgroundColor: '#22C55E' }]} />
+            <Text style={styles.legendText}>Start</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#FF0000' }]} />
-            <Text style={styles.legendText}>Destination</Text>
+            <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
+            <Text style={styles.legendText}>End</Text>
           </View>
         </View>
       </View>
+      {driverLocation && (
+        <View style={styles.locationBadge}>
+          <Ionicons name="location" size={14} color="#fff" />
+          <Text style={styles.locationBadgeText}>Live</Text>
+        </View>
+      )}
     </View>
   );
+};
+
+// Geocode city name to coordinates using Mapbox Geocoding API
+const geocodeLocation = async (locationName: string): Promise<{ lat: number; lng: number } | null> => {
+  if (!locationName) return null;
+  
+  try {
+    const response = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locationName)}.json?country=IN&access_token=${MAPBOX_ACCESS_TOKEN}`
+    );
+    const data = await response.json();
+    
+    if (data.features && data.features.length > 0) {
+      const [lng, lat] = data.features[0].center;
+      return { lat, lng };
+    }
+  } catch (error) {
+    console.error('Geocoding error:', error);
+  }
+  return null;
 };
 
 export default function ActiveRideScreen() {
@@ -92,7 +148,10 @@ export default function ActiveRideScreen() {
   const { user } = useAuth();
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number; heading?: number; speed?: number } | null>(null);
   const [isTracking, setIsTracking] = useState(false);
-  const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
+  const [fromCoords, setFromCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [toCoords, setToCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
 
   const { data: activeRideData, isLoading, refetch } = useDriverActiveRide();
   const { mutate: updateLocation } = useUpdateLocation();
@@ -102,37 +161,105 @@ export default function ActiveRideScreen() {
   const ride = activeRideData?.ride;
   const passengers = activeRideData?.passengers || [];
 
-  // Simulate location updates (in production, use expo-location)
+  // Geocode ride locations when ride data is available
   useEffect(() => {
-    if (ride?.rideStatus === 'in_progress' && ride?._id) {
-      setIsTracking(true);
+    const geocodeRideLocations = async () => {
+      if (!ride) return;
       
-      // Simulate location updates every 5 seconds
-      locationIntervalRef.current = setInterval(() => {
-        // In production, get real location from expo-location
-        const simulatedLocation = {
-          lat: (ride.from?.coordinates?.lat || 28.6139) + (Math.random() - 0.5) * 0.01,
-          lng: (ride.from?.coordinates?.lng || 77.2090) + (Math.random() - 0.5) * 0.01,
-          heading: Math.random() * 360,
-          speed: 30 + Math.random() * 20
-        };
-        
-        setCurrentLocation(simulatedLocation);
-        
-        // Send location to server
-        updateLocation({
-          rideId: ride._id,
-          location: simulatedLocation
-        });
-      }, 5000);
-    }
-
-    return () => {
-      if (locationIntervalRef.current) {
-        clearInterval(locationIntervalRef.current);
+      // Use stored coordinates if available, otherwise geocode
+      if (ride.from?.coordinates?.lat && ride.from?.coordinates?.lng) {
+        setFromCoords(ride.from.coordinates);
+      } else if (ride.from?.city || ride.from?.address) {
+        const searchQuery = `${ride.from.address || ''} ${ride.from.city || ''}`.trim();
+        const coords = await geocodeLocation(searchQuery);
+        if (coords) setFromCoords(coords);
+      }
+      
+      if (ride.to?.coordinates?.lat && ride.to?.coordinates?.lng) {
+        setToCoords(ride.to.coordinates);
+      } else if (ride.to?.city || ride.to?.address) {
+        const searchQuery = `${ride.to.address || ''} ${ride.to.city || ''}`.trim();
+        const coords = await geocodeLocation(searchQuery);
+        if (coords) setToCoords(coords);
       }
     };
-  }, [ride?.rideStatus, ride?._id]);
+    
+    geocodeRideLocations();
+  }, [ride?.from?.city, ride?.from?.address, ride?.to?.city, ride?.to?.address]);
+
+  // Request location permission and start tracking
+  useEffect(() => {
+    const setupLocation = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        setLocationPermission(status === 'granted');
+        
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Location permission is required to track your ride.');
+          return;
+        }
+
+        // Get initial location
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        
+        setCurrentLocation({
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+          heading: location.coords.heading || undefined,
+          speed: location.coords.speed || undefined,
+        });
+      } catch (error) {
+        console.error('Error getting location:', error);
+      }
+    };
+
+    setupLocation();
+  }, []);
+
+  // Start real-time location tracking when ride is in progress
+  useEffect(() => {
+    const startTracking = async () => {
+      if (ride?.rideStatus === 'in_progress' && ride?._id && locationPermission) {
+        setIsTracking(true);
+        
+        // Subscribe to location updates
+        locationSubscriptionRef.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 5000, // Update every 5 seconds
+            distanceInterval: 10, // Or every 10 meters
+          },
+          (location) => {
+            const newLocation = {
+              lat: location.coords.latitude,
+              lng: location.coords.longitude,
+              heading: location.coords.heading || undefined,
+              speed: location.coords.speed || undefined,
+            };
+            
+            setCurrentLocation(newLocation);
+            
+            // Send location to server
+            updateLocation({
+              rideId: ride._id,
+              location: newLocation,
+            });
+          }
+        );
+      }
+    };
+
+    startTracking();
+
+    return () => {
+      if (locationSubscriptionRef.current) {
+        locationSubscriptionRef.current.remove();
+        locationSubscriptionRef.current = null;
+      }
+    };
+  }, [ride?.rideStatus, ride?._id, locationPermission]);
 
   const handleStartRide = () => {
     if (!rideId) return;
@@ -176,10 +303,17 @@ export default function ActiveRideScreen() {
           style: 'destructive',
           onPress: () => {
             completeRide(ride._id, {
-              onSuccess: () => {
-                Alert.alert('Success', 'Ride completed successfully!', [
-                  { text: 'OK', onPress: () => router.replace('/(tabs)/my-rides') }
-                ]);
+              onSuccess: (data: any) => {
+                const summary = data?.summary;
+                const summaryText = summary 
+                  ? `\n\n📊 Ride Summary:\n👥 Passengers: ${summary.totalPassengers}\n💰 Earnings: ₹${summary.totalEarnings}\n⏱️ Duration: ${summary.rideDuration || 0} minutes`
+                  : '';
+                
+                Alert.alert(
+                  '🎉 Ride Completed!', 
+                  `Your ride from ${ride.from?.city} to ${ride.to?.city} has been completed successfully.${summaryText}`,
+                  [{ text: 'View My Rides', onPress: () => router.replace('/(tabs)/my-rides') }]
+                );
               },
               onError: (error: any) => {
                 Alert.alert('Error', error.response?.data?.message || 'Failed to complete ride');
@@ -194,6 +328,53 @@ export default function ActiveRideScreen() {
   const handleCallPassenger = (phone: string) => {
     if (phone) {
       Linking.openURL(`tel:${phone}`);
+    }
+  };
+
+  const handleRefreshLocation = async () => {
+    try {
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      
+      const newLocation = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+        heading: location.coords.heading || undefined,
+        speed: location.coords.speed || undefined,
+      };
+      
+      setCurrentLocation(newLocation);
+      
+      if (ride?._id && ride?.rideStatus === 'in_progress') {
+        updateLocation({
+          rideId: ride._id,
+          location: newLocation,
+        });
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to get current location');
+    }
+  };
+
+  const openInMaps = () => {
+    const destCoords = toCoords || ride?.to?.coordinates;
+    if (destCoords) {
+      const url = Platform.select({
+        ios: `maps:?daddr=${destCoords.lat},${destCoords.lng}`,
+        android: `google.navigation:q=${destCoords.lat},${destCoords.lng}`,
+      });
+      if (url) Linking.openURL(url);
+    } else {
+      // Fallback: open maps with address search
+      const address = `${ride?.to?.address || ''} ${ride?.to?.city || ''}`.trim();
+      if (address) {
+        const url = Platform.select({
+          ios: `maps:?daddr=${encodeURIComponent(address)}`,
+          android: `google.navigation:q=${encodeURIComponent(address)}`,
+        });
+        if (url) Linking.openURL(url);
+      }
     }
   };
 
@@ -244,10 +425,23 @@ export default function ActiveRideScreen() {
         {/* Map */}
         <StaticMap
           driverLocation={currentLocation || ride.currentLocation}
-          fromCoords={ride.from?.coordinates}
-          toCoords={ride.to?.coordinates}
+          fromCoords={fromCoords || ride.from?.coordinates}
+          toCoords={toCoords || ride.to?.coordinates}
           passengers={passengers}
+          isLoading={!currentLocation && !fromCoords && !toCoords}
         />
+        
+        {/* Map Action Buttons */}
+        <View style={styles.mapActions}>
+          <TouchableOpacity style={styles.mapActionButton} onPress={handleRefreshLocation}>
+            <Ionicons name="refresh" size={20} color={Colors.primary} />
+            <Text style={styles.mapActionText}>Refresh Location</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.mapActionButton, styles.navigateButton]} onPress={openInMaps}>
+            <Ionicons name="navigate" size={20} color="#fff" />
+            <Text style={[styles.mapActionText, { color: '#fff' }]}>Navigate</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Ride Info Card */}
         <View style={styles.rideInfoCard}>
@@ -460,11 +654,24 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    position: 'relative',
   },
   mapImage: {
     width: '100%',
-    height: 300,
+    height: 280,
     backgroundColor: Colors.lightGray,
+  },
+  mapLoading: {
+    width: '100%',
+    height: 280,
+    backgroundColor: Colors.lightGray,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapLoadingText: {
+    marginTop: 10,
+    color: Colors.gray,
+    fontSize: 14,
   },
   mapOverlay: {
     position: 'absolute',
@@ -474,9 +681,9 @@ const styles = StyleSheet.create({
   },
   legendContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 8,
-    padding: 8,
+    padding: 10,
     justifyContent: 'space-around',
   },
   legendItem: {
@@ -484,14 +691,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     marginRight: 6,
   },
   legendText: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.text,
+    fontWeight: '500',
+  },
+  locationBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.success,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 4,
+  },
+  locationBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  mapActions: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginTop: -10,
+    marginBottom: 10,
+    gap: 10,
+  },
+  mapActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 6,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  navigateButton: {
+    backgroundColor: Colors.primary,
+  },
+  mapActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   rideInfoCard: {
     backgroundColor: 'white',

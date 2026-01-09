@@ -13,13 +13,20 @@ import {
 import { Button } from '../../components/ui/Button';
 import { DateTimeInput } from '../../components/ui/DateTimeInput';
 import { Input } from '../../components/ui/Input';
+import { LocationSearchInput } from '../../components/ui/LocationSearchInput';
 import { useAuth } from '../../hooks/useAuth';
 import { useCreateRide } from '../../hooks/useRides';
 import { CreateRideData, Stop } from '../../types/api';
 
+type LocationData = {
+  city: string;
+  address: string;
+  coordinates?: { lat: number; lng: number };
+};
+
 type FormState = {
-  from: { city: string; address: string };
-  to: { city: string; address: string };
+  from: LocationData;
+  to: LocationData;
   departureTime: string;
   arrivalTime: string;
   price: string;
@@ -32,10 +39,12 @@ export default function CreateRideScreen() {
     from: {
       city: '',
       address: '',
+      coordinates: undefined,
     },
     to: {
       city: '',
       address: '',
+      coordinates: undefined,
     },
     departureTime: '',
     arrivalTime: '',
@@ -43,6 +52,8 @@ export default function CreateRideScreen() {
     availableSeats: '',
     details: '',
   });
+  const [fromDisplayValue, setFromDisplayValue] = useState('');
+  const [toDisplayValue, setToDisplayValue] = useState('');
   const [stops, setStops] = useState<Stop[]>([]);
   const [newStop, setNewStop] = useState({ city: '', address: '' });
   const [isLoading, setIsLoading] = useState(false);
@@ -52,15 +63,33 @@ export default function CreateRideScreen() {
 
   const prefillExample = () => {
     setFormData({
-      from: { city: 'Noida', address: 'Sector 62, Noida' },
-      to: { city: 'Rampur', address: 'Main City, Rampur' },
+      from: { city: 'Noida', address: 'Sector 62, Noida', coordinates: { lat: 28.6273, lng: 77.3714 } },
+      to: { city: 'Rampur', address: 'Main City, Rampur', coordinates: { lat: 28.8089, lng: 79.0250 } },
       departureTime: '2025-10-02T15:00:00.000Z',
       arrivalTime: '2025-10-02T16:00:00.000Z',
       price: '600',
       availableSeats: '3',
       details: 'Comfortable Toyota Camry with AC',
     });
+    setFromDisplayValue('Sector 62, Noida, Uttar Pradesh, India');
+    setToDisplayValue('Main City, Rampur, Uttar Pradesh, India');
     setStops([{ city: 'Moradabad', address: 'Moradabad Stop' }]);
+  };
+
+  const handleFromLocationSelect = (location: LocationData) => {
+    setFormData(prev => ({
+      ...prev,
+      from: location,
+    }));
+    setFromDisplayValue(location.address);
+  };
+
+  const handleToLocationSelect = (location: LocationData) => {
+    setFormData(prev => ({
+      ...prev,
+      to: location,
+    }));
+    setToDisplayValue(location.address);
   };
 
   // Check if user is a driver
@@ -283,75 +312,61 @@ export default function CreateRideScreen() {
               style={{ marginBottom: 12 }}
             />
             
-            <Text style={styles.subsectionTitle}>From</Text>
-            <Input
-              placeholder="Departure City"
-              value={formData.from.city}
-              onChangeText={(text) => handleChange('from.city', text)}
-              autoCapitalize="words"
-            />
-            <Input
-              placeholder="Departure Address"
-              value={formData.from.address}
-              onChangeText={(text) => handleChange('from.address', text)}
-              autoCapitalize="words"
-            />
+            <View style={styles.locationInputWrapper}>
+              <Text style={styles.subsectionTitle}>From</Text>
+              <LocationSearchInput
+                placeholder="Search departure location in India..."
+                value={fromDisplayValue}
+                onLocationSelect={handleFromLocationSelect}
+                onChangeText={setFromDisplayValue}
+              />
+              {formData.from.city && (
+                <View style={styles.selectedLocation}>
+                  <Text style={styles.selectedLocationLabel}>Selected:</Text>
+                  <Text style={styles.selectedLocationText}>
+                    📍 {formData.from.city} - {formData.from.address}
+                  </Text>
+                </View>
+              )}
+            </View>
 
-            <Text style={styles.subsectionTitle}>To</Text>
-            <Input
-              placeholder="Destination City"
-              value={formData.to.city}
-              onChangeText={(text) => handleChange('to.city', text)}
-              autoCapitalize="words"
-            />
-            <Input
-              placeholder="Destination Address"
-              value={formData.to.address}
-              onChangeText={(text) => handleChange('to.address', text)}
-              autoCapitalize="words"
-            />
+            <View style={[styles.locationInputWrapper, { zIndex: 999 }]}>
+              <Text style={styles.subsectionTitle}>To</Text>
+              <LocationSearchInput
+                placeholder="Search destination location in India..."
+                value={toDisplayValue}
+                onLocationSelect={handleToLocationSelect}
+                onChangeText={setToDisplayValue}
+              />
+              {formData.to.city && (
+                <View style={styles.selectedLocation}>
+                  <Text style={styles.selectedLocationLabel}>Selected:</Text>
+                  <Text style={styles.selectedLocationText}>
+                    📍 {formData.to.city} - {formData.to.address}
+                  </Text>
+                </View>
+              )}
+            </View>
 
             <Text style={styles.sectionTitle}>Schedule</Text>
 
-            <Text style={styles.subsectionTitle}>Departure</Text>
-            <View style={styles.row}>
-              <View style={styles.halfWidth}>
-                <DateTimeInput
-                  placeholder="Departure Date"
-                  value={formData.departureTime}
-                  onChangeText={(text) => handleChange('departureTime', text)}
-                  mode="date"
-                />
-              </View>
-              <View style={styles.halfWidth}>
-                <DateTimeInput
-                  placeholder="Departure Time"
-                  value={formData.departureTime}
-                  onChangeText={(text) => handleChange('departureTime', text)}
-                  mode="time"
-                />
-              </View>
-            </View>
+            <Text style={styles.subsectionTitle}>Departure Date & Time</Text>
+            <DateTimeInput
+              placeholder="Select Departure Date & Time"
+              value={formData.departureTime}
+              onChangeText={(text) => handleChange('departureTime', text)}
+              mode="datetime"
+              minimumDate={new Date()}
+            />
 
-            <Text style={styles.subsectionTitle}>Arrival</Text>
-            <View style={styles.row}>
-              <View style={styles.halfWidth}>
-                <DateTimeInput
-                  placeholder="Arrival Date"
-                  value={formData.arrivalTime}
-                  onChangeText={(text) => handleChange('arrivalTime', text)}
-                  mode="date"
-                />
-              </View>
-              <View style={styles.halfWidth}>
-                <DateTimeInput
-                  placeholder="Arrival Time"
-                  value={formData.arrivalTime}
-                  onChangeText={(text) => handleChange('arrivalTime', text)}
-                  mode="time"
-                />
-              </View>
-            </View>
+            <Text style={styles.subsectionTitle}>Arrival Date & Time</Text>
+            <DateTimeInput
+              placeholder="Select Arrival Date & Time"
+              value={formData.arrivalTime}
+              onChangeText={(text) => handleChange('arrivalTime', text)}
+              mode="datetime"
+              minimumDate={formData.departureTime ? new Date(formData.departureTime) : new Date()}
+            />
 
             <Text style={styles.sectionTitle}>Ride Details</Text>
             
@@ -564,5 +579,31 @@ const styles = StyleSheet.create({
   },
   addStopButton: {
     marginTop: 12,
+  },
+  locationInputWrapper: {
+    zIndex: 1000,
+    marginBottom: 8,
+  },
+  selectedLocation: {
+    backgroundColor: '#E8F4FD',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: -8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#B8E0FF',
+  },
+  selectedLocationLabel: {
+    fontSize: 11,
+    color: '#0077CC',
+    fontWeight: '600',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  selectedLocationText: {
+    fontSize: 13,
+    color: '#333',
+    fontWeight: '500',
   },
 });

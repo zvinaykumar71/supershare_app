@@ -4,6 +4,16 @@ export interface User {
   email: string;
   phone: string;
   isDriver: boolean;
+  profilePicture?: string;
+  avatar?: string;
+  rating?: number;
+  reviewsCount?: number;
+}
+
+export interface UpdateProfileData {
+  name?: string;
+  phone?: string;
+  profilePicture?: string;
 }
 
 export interface LoginCredentials {

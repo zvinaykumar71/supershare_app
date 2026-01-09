@@ -129,7 +129,7 @@ export default function LoginScreen() {
         <Button 
           title="Continue with Google" 
           variant="outline"
-          icon="logo-google"
+          icon="google"
           style={styles.socialButton}
           onPress={() => {
             // TODO: Implement Google login
@@ -140,7 +140,7 @@ export default function LoginScreen() {
         <Button 
           title="Continue with Facebook" 
           variant="outline"
-          icon="logo-facebook"
+          icon="facebook"
           style={styles.socialButton}
           onPress={() => {
             // TODO: Implement Facebook login

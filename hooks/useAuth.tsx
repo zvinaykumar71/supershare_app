@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { authService } from '../services/authService';
-import { DriverData, LoginCredentials, RegisterData, User } from '../types/api';
+import { DriverData, LoginCredentials, RegisterData, UpdateProfileData, User } from '../types/api';
 
 interface AuthContextType {
   user: User | null;
@@ -9,6 +9,8 @@ interface AuthContextType {
   register: (userData: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   becomeDriver: (driverData: DriverData) => Promise<any>;
+  updateProfile: (profileData: UpdateProfileData) => Promise<User>;
+  refreshUser: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -111,8 +113,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const updateProfile = async (profileData: UpdateProfileData): Promise<User> => {
+    try {
+      setIsLoading(true);
+      const response = await authService.updateProfile(profileData);
+      
+      // Update local user data
+      const updatedUser = { ...user, ...response.user };
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      
+      return updatedUser;
+    } catch (error) {
+      console.error('Update profile error:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshUser = async () => {
+    try {
+      const freshUser = await authService.getProfile();
+      // Map backend response to our User type
+      const mappedUser: User = {
+        id: freshUser.id || (freshUser as any)._id,
+        name: freshUser.name,
+        email: freshUser.email,
+        phone: freshUser.phone,
+        isDriver: freshUser.isDriver,
+        profilePicture: freshUser.profilePicture,
+        rating: freshUser.rating,
+        reviewsCount: freshUser.reviewsCount,
+      };
+      await AsyncStorage.setItem('user', JSON.stringify(mappedUser));
+      setUser(mappedUser);
+    } catch (error) {
+      console.error('Refresh user error:', error);
+      throw error;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, becomeDriver, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, becomeDriver, updateProfile, refreshUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
