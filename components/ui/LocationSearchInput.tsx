@@ -1,8 +1,8 @@
+import { MAPBOX_ACCESS_TOKEN } from '@/Constants/Env';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Keyboard,
   StyleSheet,
   Text,
@@ -10,17 +10,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { MAPBOX_ACCESS_TOKEN } from '@/Constants/Env';
 
 interface LocationResult {
   id: string;
   place_name: string;
   text: string;
   center: [number, number]; // [longitude, latitude]
-  context?: Array<{
+  context?: {
     id: string;
     text: string;
-  }>;
+  }[];
 }
 
 interface LocationSearchInputProps {
@@ -32,6 +31,9 @@ interface LocationSearchInputProps {
     coordinates?: { lat: number; lng: number };
   }) => void;
   onChangeText?: (text: string) => void;
+  onClear?: () => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
   label?: string;
   error?: string;
 }
@@ -41,23 +43,39 @@ export const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
   value,
   onLocationSelect,
   onChangeText,
+  onClear,
+  onFocus,
+  onBlur,
   label,
   error,
 }) => {
-  const [query, setQuery] = useState(value);
+  const [query, setQuery] = useState(value || '');
   const [results, setResults] = useState<LocationResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimer = useRef<any>(null);
   const inputRef = useRef<TextInput>(null);
+  const isTypingRef = useRef(false);
 
-  // Sync external value changes
+  // Initialize query from value on mount
   useEffect(() => {
-    if (!isFocused) {
+    if (value && !query) {
       setQuery(value);
     }
-  }, [value, isFocused]);
+  }, [value, query]);
+
+  // Sync external value changes - only update when not focused/typing and value changed externally
+  // This prevents the input from resetting while the user is typing
+  useEffect(() => {
+    // Don't sync if user is actively interacting with the input
+    if (!isFocused && !isTypingRef.current) {
+      // Only sync if the value is actually different
+      if (value !== query) {
+        setQuery(value);
+      }
+    }
+  }, [value, isFocused, query]);
 
   const searchLocations = useCallback(async (searchQuery: string) => {
     if (searchQuery.length < 2) {
@@ -91,7 +109,9 @@ export const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
   }, []);
 
   const handleTextChange = (text: string) => {
+    isTypingRef.current = true;
     setQuery(text);
+    // Update parent's display value when user types (but don't block typing)
     onChangeText?.(text);
 
     // Debounce the search
@@ -99,9 +119,18 @@ export const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
       clearTimeout(debounceTimer.current);
     }
 
-    debounceTimer.current = setTimeout(() => {
-      searchLocations(text);
-    }, 300);
+    // Only search if text is long enough
+    if (text.length >= 2) {
+      debounceTimer.current = setTimeout(() => {
+        searchLocations(text);
+        isTypingRef.current = false;
+      }, 300);
+    } else {
+      // Clear results if text is too short
+      setResults([]);
+      setShowResults(false);
+      isTypingRef.current = false;
+    }
   };
 
   const handleSelectLocation = (location: LocationResult) => {
@@ -130,17 +159,22 @@ export const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
       }
     }
 
-    // Create a cleaner address
+    // Create a cleaner address - remove country and state if present
     const addressParts = location.place_name.split(', ');
     if (addressParts.length > 2) {
       // Remove the last parts (state, country, postal code)
       address = addressParts.slice(0, -2).join(', ');
     }
 
-    setQuery(location.place_name);
+    // Update query to show the full place name
+    const displayValue = location.place_name;
+    setQuery(displayValue);
     setShowResults(false);
     setResults([]);
     Keyboard.dismiss();
+
+    // Update the parent's display value
+    onChangeText?.(displayValue);
 
     onLocationSelect({
       city,
@@ -154,6 +188,13 @@ export const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
 
   const handleFocus = () => {
     setIsFocused(true);
+    isTypingRef.current = false;
+    // Ensure query is in sync when focusing
+    if (query !== value && value) {
+      setQuery(value);
+    }
+    onFocus?.();
+    // Show previous results if available
     if (results.length > 0) {
       setShowResults(true);
     }
@@ -161,6 +202,8 @@ export const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
 
   const handleBlur = () => {
     setIsFocused(false);
+    isTypingRef.current = false;
+    onBlur?.();
     // Delay hiding results to allow tap on result item
     setTimeout(() => {
       setShowResults(false);
@@ -172,6 +215,7 @@ export const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
     setResults([]);
     setShowResults(false);
     onChangeText?.('');
+    onClear?.(); // Notify parent to clear form data
     inputRef.current?.focus();
   };
 
@@ -215,7 +259,7 @@ export const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
-      
+
       <View style={[styles.inputContainer, error && styles.inputError, isFocused && styles.inputFocused]}>
         <Ionicons
           name="search"
@@ -234,6 +278,9 @@ export const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
           onBlur={handleBlur}
           autoCapitalize="words"
           autoCorrect={false}
+          returnKeyType="search"
+          blurOnSubmit={false}
+          caretHidden={false}
         />
         {isLoading && (
           <ActivityIndicator size="small" color="#00A2FF" style={styles.loader} />
@@ -249,14 +296,11 @@ export const LocationSearchInput: React.FC<LocationSearchInputProps> = ({
 
       {showResults && results.length > 0 && (
         <View style={styles.resultsContainer}>
-          <FlatList
-            data={results}
-            keyExtractor={(item) => item.id}
-            renderItem={renderResultItem}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            style={styles.resultsList}
-          />
+          {results.map((item) => (
+            <View key={item.id}>
+              {renderResultItem({ item })}
+            </View>
+          ))}
         </View>
       )}
 
@@ -342,9 +386,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
     zIndex: 1001,
-  },
-  resultsList: {
-    borderRadius: 12,
   },
   resultItem: {
     flexDirection: 'row',

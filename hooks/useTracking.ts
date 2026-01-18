@@ -61,13 +61,19 @@ export const useCompleteRide = () => {
   return useMutation({
     mutationFn: (rideId: string) => trackingService.completeRide(rideId),
     onSuccess: () => {
+      // Invalidate all ride-related queries to ensure UI updates
       queryClient.invalidateQueries({ queryKey: ['driver-active-ride'] });
       queryClient.invalidateQueries({ queryKey: ['rides'] });
+      queryClient.invalidateQueries({ queryKey: ['all-rides'] });
+      queryClient.invalidateQueries({ queryKey: ['driver-rides'] });
       queryClient.invalidateQueries({ queryKey: ['user-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['user-rides'] });
       // Invalidate passenger queries so they see the completed status
       queryClient.invalidateQueries({ queryKey: ['passengerBookingRequests'] });
       queryClient.invalidateQueries({ queryKey: ['passenger-active-rides'] });
       queryClient.invalidateQueries({ queryKey: ['ride-tracking'] });
+      queryClient.invalidateQueries({ queryKey: ['current-ride-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['ride-booking-requests'] });
     },
   });
 };

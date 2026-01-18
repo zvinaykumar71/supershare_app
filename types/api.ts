@@ -49,14 +49,21 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface Coordinates {
+  lat: number;
+  lng: number;
+}
+
 export interface Location {
   city: string;
   address: string;
+  coordinates?: Coordinates;
 }
 
 export interface Stop {
   city: string;
   address: string;
+  coordinates?: Coordinates;
 }
 
 export interface CreateRideData {
@@ -99,4 +106,12 @@ export interface Ride {
   };
   duration: string;
   date: string;
+  rideStatus: string;
+  isActive: boolean;
+  bookedSeats: number;
+  allPaymentsCompleted?: boolean;
+  paymentStatus?: string;
+  startedAt?: string;
+  completedAt?: string;
+  _id?: string;
 }

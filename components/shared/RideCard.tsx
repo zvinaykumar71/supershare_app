@@ -6,19 +6,39 @@ import { Ride } from '@/types';
 import { formatCurrency, formatDate, formatTime } from '@/utils/formatters';
 // import { formatCurrency, formatDate, formatTime } from '../../utils/formatters';
 
+interface MatchInfo {
+  pickupMatch: 'start' | 'stop' | 'none';
+  pickupIndex: number;
+  dropoffMatch: 'end' | 'stop' | 'none';
+  dropoffIndex: number;
+  isPartialRoute: boolean;
+  routeCoverage: number;
+}
+
 interface RideCardProps {
-  ride: Ride;
+  ride: Ride & { matchInfo?: MatchInfo };
   onPress?: () => void;
   style?: any;
 }
 
 export function RideCard({ ride, onPress, style }: RideCardProps) {
+  const isPartialRoute = ride.matchInfo?.isPartialRoute || false;
+  const hasStops = (ride.stops?.length || 0) > 0;
+  
   return (
     <TouchableOpacity 
       style={[styles.container, style]} 
       onPress={onPress}
       activeOpacity={0.7}
     >
+      {/* Partial Route Badge */}
+      {isPartialRoute && (
+        <View style={styles.partialRouteBadge}>
+          <Ionicons name="git-branch-outline" size={14} color="#FF9500" />
+          <Text style={styles.partialRouteText}>Partial Route Available</Text>
+        </View>
+      )}
+      
       <View style={styles.header}>
         <Image source={{ uri: ride.driver.avatar }} style={styles.avatar} />
         <View style={styles.driverInfo}>
@@ -39,7 +59,19 @@ export function RideCard({ ride, onPress, style }: RideCardProps) {
       <View style={styles.route}>
         <View style={styles.timeline}>
           <View style={styles.timelineDot} />
-          <View style={styles.timelineLine} />
+          {hasStops && (
+            <>
+              <View style={styles.timelineLineShort} />
+              <View style={styles.timelineStopDot} />
+              {ride.stops!.length > 1 && (
+                <>
+                  <View style={styles.timelineLineShort} />
+                  <Text style={styles.moreStopsText}>+{ride.stops!.length - 1}</Text>
+                </>
+              )}
+            </>
+          )}
+          <View style={[styles.timelineLine, hasStops && styles.timelineLineShort]} />
           <View style={styles.timelineDot} />
         </View>
         
@@ -48,6 +80,17 @@ export function RideCard({ ride, onPress, style }: RideCardProps) {
             <Text style={styles.time}>{formatTime(ride.departureTime)}</Text>
             <Text style={styles.city} numberOfLines={1}>{ride.from.city}</Text>
           </View>
+          
+          {/* Show first stop if exists */}
+          {hasStops && (
+            <View style={styles.stopLocation}>
+              <Ionicons name="ellipse" size={6} color={Colors.gray} />
+              <Text style={styles.stopCity} numberOfLines={1}>
+                via {ride.stops![0].city}
+                {ride.stops!.length > 1 && ` +${ride.stops!.length - 1} more`}
+              </Text>
+            </View>
+          )}
           
           <View style={styles.duration}>
             <Text style={styles.durationText}>{ride.duration}</Text>
@@ -62,7 +105,12 @@ export function RideCard({ ride, onPress, style }: RideCardProps) {
 
       <View style={styles.footer}>
         <Text style={styles.date}>{formatDate(ride.date)}</Text>
-        <Text style={styles.price}>{formatCurrency(ride.price)}</Text>
+        <View style={styles.priceContainer}>
+          {isPartialRoute && ride.matchInfo?.routeCoverage && ride.matchInfo.routeCoverage < 100 && (
+            <Text style={styles.partialPriceHint}>from </Text>
+          )}
+          <Text style={styles.price}>{formatCurrency(ride.price)}</Text>
+        </View>
       </View>
 
       <View style={styles.features}>
@@ -76,6 +124,12 @@ export function RideCard({ ride, onPress, style }: RideCardProps) {
           <View style={styles.feature}>
             <Ionicons name="female" size={14} color={Colors.primary} />
             <Text style={styles.featureText}>Women only</Text>
+          </View>
+        )}
+        {hasStops && (
+          <View style={styles.feature}>
+            <Ionicons name="git-branch" size={14} color={Colors.primary} />
+            <Text style={styles.featureText}>{ride.stops!.length} stop{ride.stops!.length > 1 ? 's' : ''}</Text>
           </View>
         )}
         <Text style={styles.seats}>
@@ -96,6 +150,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  partialRouteBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  partialRouteText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FF9500',
   },
   header: {
     flexDirection: 'row',
@@ -151,10 +221,27 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: Colors.primary,
   },
+  timelineStopDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.gray,
+  },
   timelineLine: {
     width: 2,
     height: 30,
     backgroundColor: Colors.lightGray,
+    marginVertical: 2,
+  },
+  timelineLineShort: {
+    width: 2,
+    height: 12,
+    backgroundColor: Colors.lightGray,
+    marginVertical: 2,
+  },
+  moreStopsText: {
+    fontSize: 10,
+    color: Colors.gray,
     marginVertical: 2,
   },
   locations: {
@@ -164,6 +251,18 @@ const styles = StyleSheet.create({
   location: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  stopLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 50,
+    marginVertical: 4,
+    gap: 6,
+  },
+  stopCity: {
+    fontSize: 12,
+    color: Colors.gray,
+    fontStyle: 'italic',
   },
   time: {
     fontSize: 16,
@@ -198,6 +297,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.gray,
   },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  partialPriceHint: {
+    fontSize: 12,
+    color: Colors.gray,
+  },
   price: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -207,6 +314,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flexWrap: 'wrap',
   },
   feature: {
     flexDirection: 'row',

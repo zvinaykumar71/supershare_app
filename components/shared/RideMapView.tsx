@@ -35,38 +35,16 @@ interface RideMapViewProps {
 export function RideMapView({ rides, fromCity, toCity, onRideSelect }: RideMapViewProps) {
   const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
 
-  // Calculate map bounds
-  const mapData = useMemo(() => {
-    const coordinates: { lat: number; lng: number }[] = [];
-    
-    rides.forEach(ride => {
-      const fromCoords = getCityCoordinates(ride.from.city);
-      const toCoords = getCityCoordinates(ride.to.city);
-      if (fromCoords) coordinates.push({ lat: fromCoords.latitude, lng: fromCoords.longitude });
-      if (toCoords) coordinates.push({ lat: toCoords.latitude, lng: toCoords.longitude });
-    });
-
-    if (coordinates.length === 0) {
-      return { center: { lat: 28.6139, lng: 77.2090 }, zoom: 8 };
-    }
-
-    const lats = coordinates.map(c => c.lat);
-    const lngs = coordinates.map(c => c.lng);
-    const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-    const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-    
-    return { center: { lat: centerLat, lng: centerLng }, zoom: 7 };
-  }, [rides]);
 
   // Generate static map URL with markers
   const mapImageUrl = useMemo(() => {
     const markers: string[] = [];
     const paths: string[] = [];
-    
+
     rides.forEach((ride, index) => {
       const fromCoords = getCityCoordinates(ride.from.city);
       const toCoords = getCityCoordinates(ride.to.city);
-      
+
       if (fromCoords) {
         // Origin marker (green)
         markers.push(`pin-s-a+22c55e(${fromCoords.longitude},${fromCoords.latitude})`);
@@ -75,7 +53,7 @@ export function RideMapView({ rides, fromCity, toCity, onRideSelect }: RideMapVi
         // Destination marker (red)
         markers.push(`pin-s-b+ef4444(${toCoords.longitude},${toCoords.latitude})`);
       }
-      
+
       // Draw path between origin and destination
       if (fromCoords && toCoords) {
         paths.push(`path-2+3b82f6-0.5(${encodeURIComponent(`${fromCoords.longitude},${fromCoords.latitude};${toCoords.longitude},${toCoords.latitude}`)})`);
@@ -85,7 +63,7 @@ export function RideMapView({ rides, fromCity, toCity, onRideSelect }: RideMapVi
     const overlays = [...paths, ...markers].join(',');
     const width = Math.round(SCREEN_WIDTH);
     const height = 300;
-    
+
     return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${overlays}/auto/${width}x${height}@2x?access_token=${MAPBOX_ACCESS_TOKEN}&padding=50`;
   }, [rides]);
 
@@ -98,7 +76,7 @@ export function RideMapView({ rides, fromCity, toCity, onRideSelect }: RideMapVi
   const openInMaps = (ride: Ride) => {
     const fromCoords = getCityCoordinates(ride.from.city);
     const toCoords = getCityCoordinates(ride.to.city);
-    
+
     if (fromCoords && toCoords) {
       const url = `https://www.google.com/maps/dir/${fromCoords.latitude},${fromCoords.longitude}/${toCoords.latitude},${toCoords.longitude}`;
       Linking.openURL(url);
@@ -115,7 +93,7 @@ export function RideMapView({ rides, fromCity, toCity, onRideSelect }: RideMapVi
           contentFit="cover"
           transition={300}
         />
-        
+
         {/* Map Legend */}
         <View style={styles.legend}>
           <View style={styles.legendItem}>
@@ -138,7 +116,7 @@ export function RideMapView({ rides, fromCity, toCity, onRideSelect }: RideMapVi
       {/* Rides List */}
       <ScrollView style={styles.ridesList} showsVerticalScrollIndicator={false}>
         <Text style={styles.ridesListTitle}>Available Rides</Text>
-        
+
         {rides.map((ride) => (
           <TouchableOpacity
             key={ride.id}
@@ -150,8 +128,8 @@ export function RideMapView({ rides, fromCity, toCity, onRideSelect }: RideMapVi
             activeOpacity={0.7}
           >
             <View style={styles.rideHeader}>
-              <Image 
-                source={{ uri: ride.driver.avatar }} 
+              <Image
+                source={{ uri: ride.driver.avatar }}
                 style={styles.driverAvatar}
               />
               <View style={styles.rideInfo}>
@@ -183,16 +161,16 @@ export function RideMapView({ rides, fromCity, toCity, onRideSelect }: RideMapVi
                 <Ionicons name="people" size={14} color={Colors.gray} />
                 <Text style={styles.seatsText}>{ride.availableSeats} seats</Text>
               </View>
-              
+
               <View style={styles.rideActions}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.mapButton}
                   onPress={() => openInMaps(ride)}
                 >
                   <Ionicons name="navigate" size={14} color={Colors.primary} />
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
+
+                <TouchableOpacity
                   style={styles.viewButton}
                   onPress={() => router.push(`/ride/${ride.id}`)}
                 >
@@ -203,7 +181,7 @@ export function RideMapView({ rides, fromCity, toCity, onRideSelect }: RideMapVi
             </View>
           </TouchableOpacity>
         ))}
-        
+
         <View style={{ height: 20 }} />
       </ScrollView>
     </View>

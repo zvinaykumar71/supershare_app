@@ -1,12 +1,13 @@
 import { Colors } from '@/Constants/Colors';
 import { MAPBOX_ACCESS_TOKEN } from '@/Constants/Env';
+import { QRCodeGenerator } from '@/components/wallet/QRCodeGenerator';
 import { useAuth } from '@/hooks/useAuth';
-import { useDriverActiveRide, useUpdateLocation, useCompleteRide, useStartRide } from '@/hooks/useTracking';
+import { useCompleteRide, useDriverActiveRide, useStartRide, useUpdateLocation } from '@/hooks/useTracking';
 import { trackingService } from '@/services/trackingService';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -160,6 +161,28 @@ export default function ActiveRideScreen() {
 
   const ride = activeRideData?.ride;
   const passengers = activeRideData?.passengers || [];
+  const [showQRModal, setShowQRModal] = useState(false);
+
+  // Calculate total amount for QR code
+  // Sum up all passenger booking amounts, or fallback to price * bookedSeats
+  const totalAmount = useMemo(() => {
+    if (!ride) return 0;
+    
+    // Try to sum individual booking amounts first (more accurate)
+    if (passengers.length > 0) {
+      const sumFromBookings = passengers.reduce((sum: number, booking: any) => {
+        const bookingAmount = booking.totalPrice || booking.amount || ride.price || 0;
+        return sum + (Number(bookingAmount) || 0);
+      }, 0);
+      
+      if (sumFromBookings > 0) {
+        return sumFromBookings;
+      }
+    }
+    
+    // Fallback to price * bookedSeats
+    return (ride.price || 0) * (ride.bookedSeats || passengers.length || 1);
+  }, [ride, passengers]);
 
   // Geocode ride locations when ride data is available
   useEffect(() => {
@@ -241,7 +264,13 @@ export default function ActiveRideScreen() {
             
             setCurrentLocation(newLocation);
             
-            // Send location to server
+            // Send location to server (Kafka will handle real-time distribution)
+            console.log('📍 [TRACKING] Sending location update:', {
+              rideId: ride._id,
+              location: newLocation,
+              timestamp: new Date().toISOString(),
+            });
+            
             updateLocation({
               rideId: ride._id,
               location: newLocation,
@@ -294,29 +323,42 @@ export default function ActiveRideScreen() {
     if (!ride?._id) return;
     
     Alert.alert(
-      'Complete Ride',
-      'Are you sure you want to complete this ride? This action cannot be undone.',
+      'End Ride',
+      'Are you sure you want to end this ride? You will need to collect payment from passengers before the ride is fully completed. Driver mode will remain active until all payments are received.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Complete',
+          text: 'End Ride',
           style: 'destructive',
           onPress: () => {
             completeRide(ride._id, {
               onSuccess: (data: any) => {
                 const summary = data?.summary;
                 const summaryText = summary 
-                  ? `\n\n📊 Ride Summary:\n👥 Passengers: ${summary.totalPassengers}\n💰 Earnings: ₹${summary.totalEarnings}\n⏱️ Duration: ${summary.rideDuration || 0} minutes`
+                  ? `\n\n📊 Ride Summary:\n👥 Passengers: ${summary.totalPassengers}\n💰 Total Amount: ₹${summary.totalEarnings}\n⏱️ Duration: ${summary.rideDuration || 0} minutes`
                   : '';
                 
                 Alert.alert(
-                  '🎉 Ride Completed!', 
-                  `Your ride from ${ride.from?.city} to ${ride.to?.city} has been completed successfully.${summaryText}`,
-                  [{ text: 'View My Rides', onPress: () => router.replace('/(tabs)/my-rides') }]
+                  'Ride Ended - Payment Required', 
+                  `Your ride from ${ride.from?.city} to ${ride.to?.city} has ended.${summaryText}\n\n⚠️ IMPORTANT: Generate QR codes for passengers to pay. Driver mode will remain active until all payments are completed.`,
+                  [
+                    { 
+                      text: 'Generate QR Code', 
+                      onPress: () => {
+                        setShowQRModal(true);
+                        refetch();
+                      }
+                    },
+                    { 
+                      text: 'OK', 
+                      style: 'cancel',
+                      onPress: () => refetch()
+                    }
+                  ]
                 );
               },
               onError: (error: any) => {
-                Alert.alert('Error', error.response?.data?.message || 'Failed to complete ride');
+                Alert.alert('Error', error.response?.data?.message || 'Failed to end ride');
               }
             });
           }
@@ -412,11 +454,24 @@ export default function ActiveRideScreen() {
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {ride.rideStatus === 'in_progress' ? 'Ride In Progress' : 'Start Ride'}
+          {ride.rideStatus === 'in_progress' 
+            ? 'Ride In Progress' 
+            : (ride.rideStatus === 'completed' || ride.rideStatus === 'COMPLETED')
+            ? 'Ride Completed'
+            : 'Start Ride'}
         </Text>
-        <View style={[styles.statusBadge, ride.rideStatus === 'in_progress' ? styles.statusActive : styles.statusScheduled]}>
+        <View style={[styles.statusBadge, 
+          ride.rideStatus === 'in_progress' 
+            ? styles.statusActive 
+            : (ride.rideStatus === 'completed' || ride.rideStatus === 'COMPLETED')
+            ? styles.statusCompleted
+            : styles.statusScheduled]}>
           <Text style={styles.statusText}>
-            {ride.rideStatus === 'in_progress' ? 'LIVE' : 'SCHEDULED'}
+            {ride.rideStatus === 'in_progress' 
+              ? 'LIVE' 
+              : (ride.rideStatus === 'completed' || ride.rideStatus === 'COMPLETED')
+              ? 'COMPLETED'
+              : 'SCHEDULED'}
           </Text>
         </View>
       </View>
@@ -533,6 +588,25 @@ export default function ActiveRideScreen() {
         </View>
       </ScrollView>
 
+      {/* Payment Status Banner */}
+      {(ride.rideStatus === 'in_progress' || ride.rideStatus === 'PAYMENT_PENDING' || 
+        ride.rideStatus === 'completed' || ride.rideStatus === 'COMPLETED' ||
+        (ride.paymentStatus === 'PENDING' || ride.paymentStatus === 'pending' || 
+         ride.paymentStatus === 'partial' || ride.paymentStatus === 'PARTIAL' ||
+         ride.allPaymentsCompleted === false || ride.allPaymentsCompleted === null)) && (
+        <View style={styles.paymentBanner}>
+          <Ionicons name="cash-outline" size={20} color={Colors.warning} />
+          <View style={styles.paymentBannerContent}>
+            <Text style={styles.paymentBannerTitle}>Payment Pending</Text>
+            <Text style={styles.paymentBannerText}>
+              {ride.rideStatus === 'in_progress' 
+                ? 'Generate QR codes after ending the ride'
+                : 'Generate QR codes for passengers to pay. Driver mode will remain active until all payments are received.'}
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Bottom Action Button */}
       <View style={styles.bottomActions}>
         {ride.rideStatus === 'scheduled' ? (
@@ -546,19 +620,53 @@ export default function ActiveRideScreen() {
               {isStarting ? 'Starting...' : 'Start Ride'}
             </Text>
           </TouchableOpacity>
-        ) : (
+        ) : ride.rideStatus === 'in_progress' ? (
           <TouchableOpacity
             style={[styles.actionButton, styles.completeButton]}
             onPress={handleCompleteRide}
             disabled={isCompleting}
           >
-            <Ionicons name="checkmark-circle" size={24} color="white" />
+            <Ionicons name="flag" size={24} color="white" />
             <Text style={styles.actionButtonText}>
-              {isCompleting ? 'Completing...' : 'Complete Ride'}
+              {isCompleting ? 'Ending...' : 'End Ride'}
             </Text>
           </TouchableOpacity>
-        )}
+        ) : (ride.rideStatus === 'completed' || ride.rideStatus === 'COMPLETED' || 
+              ride.rideStatus === 'PAYMENT_PENDING' || 
+              ride.paymentStatus === 'PENDING' || ride.paymentStatus === 'pending' || 
+              ride.allPaymentsCompleted === false ||
+              (passengers.some((p: any) => p.paymentStatus === 'pending' || p.paymentStatus === 'PENDING'))) ? (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.qrButton]}
+            onPress={() => setShowQRModal(true)}
+          >
+            <Ionicons name="qr-code" size={24} color="white" />
+            <Text style={styles.actionButtonText}>Generate Payment QR</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
+
+      {/* QR Code Generator Modal */}
+      {/* Keep modal mounted even if ride data changes during refetch */}
+      {showQRModal && ride && (ride._id || ride.id) && (
+        <QRCodeGenerator
+          visible={showQRModal}
+          rideId={String(ride._id || ride.id)}
+          rideDetails={{
+            from: ride.from?.city || ride.from?.address,
+            to: ride.to?.city || ride.to?.address,
+            totalAmount: totalAmount,
+            passengerCount: passengers.length,
+          }}
+          onClose={() => {
+            setShowQRModal(false);
+            // Refetch after modal closes to update ride status
+            setTimeout(() => {
+              refetch();
+            }, 100);
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -636,6 +744,9 @@ const styles = StyleSheet.create({
   },
   statusScheduled: {
     backgroundColor: Colors.warning,
+  },
+  statusCompleted: {
+    backgroundColor: Colors.primary,
   },
   statusText: {
     color: 'white',
@@ -926,11 +1037,40 @@ const styles = StyleSheet.create({
   completeButton: {
     backgroundColor: Colors.primary,
   },
+  qrButton: {
+    backgroundColor: Colors.success,
+  },
   actionButtonText: {
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 10,
+  },
+  paymentBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.warning + '20',
+    marginHorizontal: 20,
+    marginBottom: 10,
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.warning,
+    gap: 12,
+  },
+  paymentBannerContent: {
+    flex: 1,
+  },
+  paymentBannerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  paymentBannerText: {
+    fontSize: 13,
+    color: Colors.gray,
+    lineHeight: 18,
   },
 });
 

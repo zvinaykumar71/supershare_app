@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -13,7 +14,8 @@ import {
 import { Button } from '../../components/ui/Button';
 import { DateTimeInput } from '../../components/ui/DateTimeInput';
 import { Input } from '../../components/ui/Input';
-import { LocationSearchInput } from '../../components/ui/LocationSearchInput';
+import { LocationPickerModal } from '../../components/ui/LocationPickerModal';
+import { Colors } from '../../Constants/Colors';
 import { useAuth } from '../../hooks/useAuth';
 import { useCreateRide } from '../../hooks/useRides';
 import { CreateRideData, Stop } from '../../types/api';
@@ -52,8 +54,8 @@ export default function CreateRideScreen() {
     availableSeats: '',
     details: '',
   });
-  const [fromDisplayValue, setFromDisplayValue] = useState('');
-  const [toDisplayValue, setToDisplayValue] = useState('');
+  const [isFromPickerVisible, setFromPickerVisible] = useState(false);
+  const [isToPickerVisible, setToPickerVisible] = useState(false);
   const [stops, setStops] = useState<Stop[]>([]);
   const [newStop, setNewStop] = useState({ city: '', address: '' });
   const [isLoading, setIsLoading] = useState(false);
@@ -61,35 +63,26 @@ export default function CreateRideScreen() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const prefillExample = () => {
-    setFormData({
-      from: { city: 'Noida', address: 'Sector 62, Noida', coordinates: { lat: 28.6273, lng: 77.3714 } },
-      to: { city: 'Rampur', address: 'Main City, Rampur', coordinates: { lat: 28.8089, lng: 79.0250 } },
-      departureTime: '2025-10-02T15:00:00.000Z',
-      arrivalTime: '2025-10-02T16:00:00.000Z',
-      price: '600',
-      availableSeats: '3',
-      details: 'Comfortable Toyota Camry with AC',
-    });
-    setFromDisplayValue('Sector 62, Noida, Uttar Pradesh, India');
-    setToDisplayValue('Main City, Rampur, Uttar Pradesh, India');
-    setStops([{ city: 'Moradabad', address: 'Moradabad Stop' }]);
-  };
-
-  const handleFromLocationSelect = (location: LocationData) => {
+  const handleFromLocationSelect = (location: { name: string; address: string; coordinates?: { lat: number; lng: number } }) => {
     setFormData(prev => ({
       ...prev,
-      from: location,
+      from: {
+        city: location.name,
+        address: location.address,
+        coordinates: location.coordinates,
+      },
     }));
-    setFromDisplayValue(location.address);
   };
 
-  const handleToLocationSelect = (location: LocationData) => {
+  const handleToLocationSelect = (location: { name: string; address: string; coordinates?: { lat: number; lng: number } }) => {
     setFormData(prev => ({
       ...prev,
-      to: location,
+      to: {
+        city: location.name,
+        address: location.address,
+        coordinates: location.coordinates,
+      },
     }));
-    setToDisplayValue(location.address);
   };
 
   // Check if user is a driver
@@ -101,8 +94,8 @@ export default function CreateRideScreen() {
           <Text style={styles.errorText}>
             You need to be a registered driver to create rides. Please complete your driver registration first.
           </Text>
-          <Button 
-            title="Become a Driver" 
+          <Button
+            title="Become a Driver"
             onPress={() => router.push('/(auth)/become-driver')}
             style={styles.errorButton}
           />
@@ -173,11 +166,11 @@ export default function CreateRideScreen() {
     // Try to parse the date/time strings
     let departure: Date;
     let arrival: Date;
-    
+
     try {
       departure = new Date(formData.departureTime);
       arrival = new Date(formData.arrivalTime);
-      
+
       if (isNaN(departure.getTime()) || isNaN(arrival.getTime())) {
         Alert.alert('Error', 'Please enter valid date and time');
         return false;
@@ -186,7 +179,7 @@ export default function CreateRideScreen() {
       Alert.alert('Error', 'Please enter valid date and time');
       return false;
     }
-    
+
     if (arrival <= departure) {
       Alert.alert('Error', 'Arrival time must be after departure time');
       return false;
@@ -219,7 +212,7 @@ export default function CreateRideScreen() {
 
   const handleSubmit = async () => {
 
-    
+
     if (!validateForm()) {
       return;
     }
@@ -230,10 +223,12 @@ export default function CreateRideScreen() {
         from: {
           city: formData.from.city.trim(),
           address: formData.from.address.trim(),
+          coordinates: formData.from.coordinates,
         },
         to: {
           city: formData.to.city.trim(),
           address: formData.to.address.trim(),
+          coordinates: formData.to.coordinates,
         },
         departureTime: new Date(formData.departureTime).toISOString(),
         arrivalTime: new Date(formData.arrivalTime).toISOString(),
@@ -245,7 +240,7 @@ export default function CreateRideScreen() {
 
 
       const result = await createRide.mutateAsync(rideData);
-      
+
       // Invalidate the driver-active-ride query to switch to driver mode
       queryClient.invalidateQueries({ queryKey: ['driver-active-ride'] });
       queryClient.invalidateQueries({ queryKey: ['user-rides'] });
@@ -253,11 +248,19 @@ export default function CreateRideScreen() {
 
       setTimeout(() => {
         Alert.alert(
-          'Success!', 
-          'Your ride has been created successfully. You are now in Driver Mode.',
+          '🚀 Driver Mode Activated!',
+          'Your ride has been created successfully. You are now in Driver Mode and passengers can book your ride.',
           [
             {
-              text: 'OK',
+              text: 'View Active Ride',
+              onPress: () => {
+                // Navigate to active ride screen
+                router.replace(`/ride/active?rideId=${result.ride._id}`);
+              }
+            },
+            {
+              text: 'Go to Home',
+              style: 'cancel',
               onPress: () => {
                 router.replace('/(tabs)/home');
               }
@@ -265,20 +268,10 @@ export default function CreateRideScreen() {
           ]
         );
       }, 100);
-      // Alert.alert(
-      //   'Success!', 
-      //   'Your ride has been created successfully and is now available for booking.',
-      //   [
-      //     {
-      //       text: 'OK',
-      //       onPress: () => router.replace('/(tabs)/home')
-      //     }
-      //   ]
-      // );
     } catch (error: any) {
       console.error('Create ride error:', error);
       Alert.alert(
-        'Creation Failed', 
+        'Creation Failed',
         error.response?.data?.message || 'Failed to create ride. Please try again.'
       );
     } finally {
@@ -287,7 +280,7 @@ export default function CreateRideScreen() {
   };
 
   return (
-    <ImageBackground 
+    <ImageBackground
       source={{ uri: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80' }}
       style={styles.backgroundImage}
       resizeMode="cover"
@@ -299,54 +292,75 @@ export default function CreateRideScreen() {
           </TouchableOpacity>
           <Text style={styles.title}>Create a Ride</Text>
         </View>
-        
+
         <View style={styles.formContainer}>
           <View style={styles.form}>
             <Text style={styles.sectionTitle}>Route Information</Text>
 
-            <Button
-              title="Prefill example"
-              onPress={prefillExample}
-              variant="outline"
-              icon="cloud-download-outline"
-              style={{ marginBottom: 12 }}
-            />
-            
             <View style={styles.locationInputWrapper}>
               <Text style={styles.subsectionTitle}>From</Text>
-              <LocationSearchInput
-                placeholder="Search departure location in India..."
-                value={fromDisplayValue}
-                onLocationSelect={handleFromLocationSelect}
-                onChangeText={setFromDisplayValue}
-              />
-              {formData.from.city && (
-                <View style={styles.selectedLocation}>
-                  <Text style={styles.selectedLocationLabel}>Selected:</Text>
-                  <Text style={styles.selectedLocationText}>
-                    📍 {formData.from.city} - {formData.from.address}
-                  </Text>
+              <TouchableOpacity
+                style={styles.locationInputRow}
+                onPress={() => setFromPickerVisible(true)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.locationIconContainer}>
+                  <Ionicons name="location" size={20} color={Colors.primary} />
                 </View>
-              )}
+                <View style={styles.locationInputTextContainer}>
+                  <Text style={[styles.locationInputText, !formData.from.city && styles.locationPlaceholderText]}>
+                    {formData.from.city || formData.from.address || 'Select departure location'}
+                  </Text>
+                  {formData.from.address && formData.from.city && (
+                    <Text style={styles.locationInputSubtext} numberOfLines={1}>
+                      {formData.from.address}
+                    </Text>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#CCC" />
+              </TouchableOpacity>
             </View>
 
-            <View style={[styles.locationInputWrapper, { zIndex: 999 }]}>
+            <View style={styles.locationInputWrapper}>
               <Text style={styles.subsectionTitle}>To</Text>
-              <LocationSearchInput
-                placeholder="Search destination location in India..."
-                value={toDisplayValue}
-                onLocationSelect={handleToLocationSelect}
-                onChangeText={setToDisplayValue}
-              />
-              {formData.to.city && (
-                <View style={styles.selectedLocation}>
-                  <Text style={styles.selectedLocationLabel}>Selected:</Text>
-                  <Text style={styles.selectedLocationText}>
-                    📍 {formData.to.city} - {formData.to.address}
-                  </Text>
+              <TouchableOpacity
+                style={styles.locationInputRow}
+                onPress={() => setToPickerVisible(true)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.locationIconContainer}>
+                  <Ionicons name="location" size={20} color={Colors.danger} />
                 </View>
-              )}
+                <View style={styles.locationInputTextContainer}>
+                  <Text style={[styles.locationInputText, !formData.to.city && styles.locationPlaceholderText]}>
+                    {formData.to.city || formData.to.address || 'Select destination location'}
+                  </Text>
+                  {formData.to.address && formData.to.city && (
+                    <Text style={styles.locationInputSubtext} numberOfLines={1}>
+                      {formData.to.address}
+                    </Text>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#CCC" />
+              </TouchableOpacity>
             </View>
+
+            {/* Location Picker Modals */}
+            <LocationPickerModal
+              visible={isFromPickerVisible}
+              onClose={() => setFromPickerVisible(false)}
+              onSelect={handleFromLocationSelect}
+              placeholder="Search departure location..."
+              title="Where from?"
+            />
+
+            <LocationPickerModal
+              visible={isToPickerVisible}
+              onClose={() => setToPickerVisible(false)}
+              onSelect={handleToLocationSelect}
+              placeholder="Search destination location..."
+              title="Where to?"
+            />
 
             <Text style={styles.sectionTitle}>Schedule</Text>
 
@@ -369,7 +383,7 @@ export default function CreateRideScreen() {
             />
 
             <Text style={styles.sectionTitle}>Ride Details</Text>
-            
+
             <View style={styles.row}>
               <View style={styles.halfWidth}>
                 <Input
@@ -399,13 +413,13 @@ export default function CreateRideScreen() {
             />
 
             <Text style={styles.sectionTitle}>Stops (Optional)</Text>
-            
+
             {stops.map((stop, index) => (
               <View key={index} style={styles.stopItem}>
                 <View style={styles.stopInfo}>
                   <Text style={styles.stopText}>{stop.city} - {stop.address}</Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => removeStop(index)}
                   style={styles.removeStopButton}
                 >
@@ -433,17 +447,17 @@ export default function CreateRideScreen() {
                   />
                 </View>
               </View>
-              <Button 
-                title="Add Stop" 
+              <Button
+                title="Add Stop"
                 onPress={addStop}
                 variant="outline"
                 style={styles.addStopButton}
               />
             </View>
-            
-            <Button 
-              title="Create Ride" 
-              onPress={handleSubmit} 
+
+            <Button
+              title="Create Ride"
+              onPress={handleSubmit}
               loading={isLoading}
               style={styles.submitButton}
             />
@@ -581,29 +595,39 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   locationInputWrapper: {
-    zIndex: 1000,
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  selectedLocation: {
-    backgroundColor: '#E8F4FD',
-    borderRadius: 8,
-    padding: 10,
-    marginTop: -8,
-    marginBottom: 8,
+  locationInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#B8E0FF',
+    borderColor: '#E0E0E0',
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    minHeight: 50,
   },
-  selectedLocationLabel: {
-    fontSize: 11,
-    color: '#0077CC',
-    fontWeight: '600',
-    marginBottom: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  locationIconContainer: {
+    width: 24,
+    alignItems: 'center',
+    marginRight: 12,
   },
-  selectedLocationText: {
-    fontSize: 13,
+  locationInputTextContainer: {
+    flex: 1,
+  },
+  locationInputText: {
+    fontSize: 16,
     color: '#333',
     fontWeight: '500',
+  },
+  locationPlaceholderText: {
+    color: '#999',
+    fontWeight: '400',
+  },
+  locationInputSubtext: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
   },
 });

@@ -23,6 +23,9 @@ export const useCancelBooking = () => {
     mutationFn: (id) => bookingService.cancelBooking(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['passengerBookingRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['ride-booking-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['current-ride-requests'] });
     },
   });
 };
@@ -67,6 +70,23 @@ export const useRejectBooking = () => {
       queryClient.invalidateQueries({ queryKey: ['current-ride-requests'] });
       queryClient.invalidateQueries({ queryKey: ['user-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['rides'] });
+      queryClient.invalidateQueries({ queryKey: ['passengerBookingRequests'] });
+    },
+  });
+};
+
+export const useCancelBookingAsDriver = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ bookingId, reason }) => bookingService.cancelBookingAsDriver(bookingId, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ride-booking-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['current-ride-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['user-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['rides'] });
+      queryClient.invalidateQueries({ queryKey: ['driver-active-ride'] });
+      queryClient.invalidateQueries({ queryKey: ['passengerBookingRequests'] });
     },
   });
 };

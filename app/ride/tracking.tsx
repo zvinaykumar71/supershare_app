@@ -5,7 +5,7 @@ import { useRideTracking } from '@/hooks/useTracking';
 import { trackingService } from '@/services/trackingService';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -23,46 +23,46 @@ import {
 const { width } = Dimensions.get('window');
 
 // Static Map component for passenger view
-const TrackingMap = ({ 
-  driverLocation, 
-  pickupCoords, 
+const TrackingMap = ({
+  driverLocation,
+  pickupCoords,
   destinationCoords,
   isTracking
-}: { 
+}: {
   driverLocation?: { lat: number; lng: number } | null;
   pickupCoords?: { lat: number; lng: number };
   destinationCoords?: { lat: number; lng: number };
   isTracking: boolean;
 }) => {
   let markers = '';
-  
+
   // Driver marker (blue car)
   if (isTracking && driverLocation?.lat && driverLocation?.lng) {
     markers += `pin-l-car+0066FF(${driverLocation.lng},${driverLocation.lat}),`;
   }
-  
+
   // Pickup marker (green)
   if (pickupCoords?.lat && pickupCoords?.lng) {
     markers += `pin-s-a+00FF00(${pickupCoords.lng},${pickupCoords.lat}),`;
   }
-  
+
   // Destination marker (red)
   if (destinationCoords?.lat && destinationCoords?.lng) {
     markers += `pin-s-b+FF0000(${destinationCoords.lng},${destinationCoords.lat}),`;
   }
-  
+
   markers = markers.slice(0, -1);
-  
+
   // Calculate center
   const centerLat = driverLocation?.lat || pickupCoords?.lat || 28.6139;
   const centerLng = driverLocation?.lng || pickupCoords?.lng || 77.2090;
-  
+
   const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${markers ? markers + '/' : ''}${centerLng},${centerLat},12,0/${Math.round(width - 40)}x250@2x?access_token=${MAPBOX_ACCESS_TOKEN}`;
 
   return (
     <View style={styles.mapContainer}>
-      <Image 
-        source={{ uri: mapUrl }} 
+      <Image
+        source={{ uri: mapUrl }}
         style={styles.mapImage}
         resizeMode="cover"
       />
@@ -95,14 +95,14 @@ const TrackingMap = ({
 };
 
 // ETA Card Component
-const ETACard = ({ 
-  distance, 
-  eta, 
+const ETACard = ({
+  distance,
+  eta,
   label,
   icon,
   color
-}: { 
-  distance: number | null; 
+}: {
+  distance: number | null;
   eta: number | null;
   label: string;
   icon: string;
@@ -127,10 +127,12 @@ const ETACard = ({
 export default function RideTrackingScreen() {
   const { id } = useLocalSearchParams();
   const rideId = Array.isArray(id) ? id[0] : id?.toString();
-  const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, isLoading, refetch, error } = useRideTracking(rideId || '');
+
+  // Log tracking updates for testing
+
 
   const ride = data?.ride;
   const booking = data?.booking;
@@ -217,7 +219,7 @@ export default function RideTrackingScreen() {
         </View>
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -226,10 +228,10 @@ export default function RideTrackingScreen() {
       >
         {/* Map */}
         <TrackingMap
-          driverLocation={ride.currentLocation}
+          driverLocation={tracking?.driverLocation || ride.currentLocation}
           pickupCoords={ride.from?.coordinates}
           destinationCoords={ride.to?.coordinates}
-          isTracking={tracking?.isTracking || false}
+          isTracking={tracking?.isTracking || ride.rideStatus === 'in_progress'}
         />
 
         {/* ETA Cards - Only show when tracking */}
@@ -258,7 +260,7 @@ export default function RideTrackingScreen() {
             <Ionicons name="time-outline" size={40} color={Colors.warning} />
             <Text style={styles.waitingTitle}>Waiting for Driver</Text>
             <Text style={styles.waitingSubtitle}>
-              The driver hasn't started the ride yet. You'll see real-time tracking once the ride begins.
+              The driver hasn&apos;t started the ride yet. You&apos;ll see real-time tracking once the ride begins.
             </Text>
           </View>
         )}
@@ -292,7 +294,7 @@ export default function RideTrackingScreen() {
         {/* Route Card */}
         <View style={styles.routeCard}>
           <Text style={styles.sectionTitle}>Route Details</Text>
-          
+
           <View style={styles.routeTimeline}>
             <View style={styles.routePoint}>
               <View style={[styles.routeDot, { backgroundColor: Colors.success }]} />
@@ -302,11 +304,11 @@ export default function RideTrackingScreen() {
                 <Text style={styles.routeAddress}>{booking?.pickupPoint || ride.from?.address}</Text>
               </View>
             </View>
-            
+
             <View style={styles.routeLineContainer}>
               <View style={styles.routeLineVertical} />
             </View>
-            
+
             <View style={styles.routePoint}>
               <View style={[styles.routeDot, { backgroundColor: Colors.danger }]} />
               <View style={styles.routeContent}>
@@ -326,17 +328,17 @@ export default function RideTrackingScreen() {
         {/* Booking Details */}
         <View style={styles.bookingCard}>
           <Text style={styles.sectionTitle}>Your Booking</Text>
-          
+
           <View style={styles.bookingRow}>
             <Text style={styles.bookingLabel}>Seats</Text>
             <Text style={styles.bookingValue}>{booking?.seats}</Text>
           </View>
-          
+
           <View style={styles.bookingRow}>
             <Text style={styles.bookingLabel}>Total Price</Text>
             <Text style={styles.bookingValueHighlight}>₹{booking?.totalPrice}</Text>
           </View>
-          
+
           <View style={styles.bookingRow}>
             <Text style={styles.bookingLabel}>Status</Text>
             <View style={[styles.bookingStatusBadge, { backgroundColor: Colors.lightSuccess }]}>

@@ -128,11 +128,11 @@ export function BookingRequestCard({
         <View style={styles.locations}>
           <View style={styles.location}>
             <Text style={styles.time}>{ride.departureTime ? formatTime(ride.departureTime) : ''}</Text>
-            <Text style={styles.city} numberOfLines={1}>{ride.from?.city}</Text>
+            <Text style={styles.city} numberOfLines={1}>{ride.from?.city || 'Origin'}</Text>
           </View>
           <View style={styles.location}>
             <Text style={styles.time}>{ride.arrivalTime ? formatTime(ride.arrivalTime) : ''}</Text>
-            <Text style={styles.city} numberOfLines={1}>{ride.to?.city}</Text>
+            <Text style={styles.city} numberOfLines={1}>{ride.to?.city || 'Destination'}</Text>
           </View>
         </View>
       </View>

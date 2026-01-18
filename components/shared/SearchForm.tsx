@@ -1,10 +1,11 @@
 // components/shared/SearchForm.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { Colors } from '../../Constants/Colors';
 import { formatDate } from '../../utils/formatters';
+import { LocationPickerModal } from '../ui/LocationPickerModal';
 
 interface SearchFormProps {
   values: {
@@ -19,6 +20,8 @@ interface SearchFormProps {
 
 export function SearchForm({ values, onChange, onSubmit }: SearchFormProps) {
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
+  const [isFromPickerVisible, setFromPickerVisible] = useState(false);
+  const [isToPickerVisible, setToPickerVisible] = useState(false);
 
   const swapLocations = () => {
     onChange({
@@ -28,38 +31,54 @@ export function SearchForm({ values, onChange, onSubmit }: SearchFormProps) {
     });
   };
 
+  const handleFromSelect = (location: { name: string; address: string }) => {
+    onChange({ ...values, from: location.name });
+  };
+
+  const handleToSelect = (location: { name: string; address: string }) => {
+    onChange({ ...values, to: location.name });
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.inputsContainer}>
-        <View style={styles.inputRow}>
+        {/* From Location */}
+        <TouchableOpacity 
+          style={styles.inputRow}
+          onPress={() => setFromPickerVisible(true)}
+          activeOpacity={0.7}
+        >
           <View style={styles.iconContainer}>
             <Ionicons name="location" size={20} color={Colors.primary} />
           </View>
-          <TextInput
-            style={styles.input}
-            placeholder="From"
-            value={values.from}
-            onChangeText={(text) => onChange({ ...values, from: text })}
-            placeholderTextColor={Colors.gray}
-          />
-        </View>
+          <View style={styles.inputTextContainer}>
+            <Text style={[styles.inputText, !values.from && styles.placeholderText]}>
+              {values.from || 'From'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#CCC" />
+        </TouchableOpacity>
         
         <TouchableOpacity style={styles.swapButton} onPress={swapLocations}>
           <Ionicons name="swap-vertical" size={20} color={Colors.gray} />
         </TouchableOpacity>
         
-        <View style={styles.inputRow}>
+        {/* To Location */}
+        <TouchableOpacity 
+          style={styles.inputRow}
+          onPress={() => setToPickerVisible(true)}
+          activeOpacity={0.7}
+        >
           <View style={styles.iconContainer}>
             <Ionicons name="location" size={20} color={Colors.danger} />
           </View>
-          <TextInput
-            style={styles.input}
-            placeholder="To"
-            value={values.to}
-            onChangeText={(text) => onChange({ ...values, to: text })}
-            placeholderTextColor={Colors.gray}
-          />
-        </View>
+          <View style={styles.inputTextContainer}>
+            <Text style={[styles.inputText, !values.to && styles.placeholderText]}>
+              {values.to || 'To'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#CCC" />
+        </TouchableOpacity>
       </View>
       
       <View style={styles.optionsContainer}>
@@ -132,6 +151,7 @@ export function SearchForm({ values, onChange, onSubmit }: SearchFormProps) {
           isVisible={isDatePickerVisible}
           mode="date"
           date={values.date instanceof Date ? values.date : new Date(values.date as any)}
+          minimumDate={new Date()}
           onConfirm={(d) => {
             onChange({ ...values, date: d });
             setDatePickerVisible(false);
@@ -140,9 +160,26 @@ export function SearchForm({ values, onChange, onSubmit }: SearchFormProps) {
           is24Hour={true}
         />
       )}
+
+      {/* Location Picker Modals */}
+      <LocationPickerModal
+        visible={isFromPickerVisible}
+        onClose={() => setFromPickerVisible(false)}
+        onSelect={handleFromSelect}
+        placeholder="Search departure city..."
+        title="Where from?"
+      />
+
+      <LocationPickerModal
+        visible={isToPickerVisible}
+        onClose={() => setToPickerVisible(false)}
+        onSelect={handleToSelect}
+        placeholder="Search destination city..."
+        title="Where to?"
+      />
       
       <TouchableOpacity 
-        style={styles.searchButton}
+        style={[styles.searchButton, (!values.from || !values.to) && styles.searchButtonDisabled]}
         onPress={onSubmit}
         disabled={!values.from || !values.to}
       >
@@ -172,18 +209,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: Colors.lightGray,
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
   iconContainer: {
     width: 24,
     alignItems: 'center',
     marginRight: 12,
   },
-  input: {
+  inputTextContainer: {
     flex: 1,
-    height: 40,
+  },
+  inputText: {
     fontSize: 16,
     color: Colors.text,
+    fontWeight: '500',
+  },
+  placeholderText: {
+    color: Colors.gray,
+    fontWeight: '400',
   },
   swapButton: {
     alignSelf: 'flex-start',
@@ -252,6 +295,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     gap: 8,
+  },
+  searchButtonDisabled: {
+    backgroundColor: Colors.gray,
+    opacity: 0.6,
   },
   searchButtonText: {
     color: 'white',

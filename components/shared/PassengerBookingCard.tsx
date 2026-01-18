@@ -1,9 +1,10 @@
 import { Colors } from '@/Constants/Colors';
+import { QRCodeScanner } from '@/components/wallet/QRCodeScanner';
 import { formatCurrency, formatDate, formatTime } from '@/utils/formatters';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type BookingRequest = {
   id: string;
@@ -79,6 +80,7 @@ export function PassengerBookingCard({
   const driver = ride.driver;
   const seats = booking.seats || 1;
   const totalPrice = booking.totalPrice ?? ride.price ?? 0;
+  const [showQRScanner, setShowQRScanner] = useState(false);
 
   const getStatusColor = () => {
     switch (booking.status) {
@@ -168,6 +170,43 @@ export function PassengerBookingCard({
       router.push({ pathname: '/ride/tracking', params: { id: rideId } });
     }
   };
+
+  const handlePay = () => {
+    // Payment is available when:
+    // 1. Ride is ended (in_progress ended, PAYMENT_PENDING, or COMPLETED with pending payment)
+    // 2. Payment is pending
+    const rideEnded = ride.rideStatus === 'PAYMENT_PENDING' || 
+                      ride.rideStatus === 'COMPLETED' || 
+                      ride.rideStatus === 'completed' ||
+                      (ride.rideStatus === 'in_progress' && ride.paymentStatus === 'PENDING');
+    const paymentPending = booking.paymentStatus === 'PENDING' || 
+                           booking.paymentStatus === 'pending' || 
+                           !booking.paymentStatus ||
+                           ride.paymentStatus === 'PENDING';
+    
+    if (!rideEnded) {
+      Alert.alert('Payment Not Available', 'Please wait for the ride to end before making payment.');
+      return;
+    }
+
+    if (!paymentPending) {
+      Alert.alert('Already Paid', 'Payment for this ride has already been completed.');
+      return;
+    }
+
+    setShowQRScanner(true);
+  };
+
+  // Payment button shows when ride is ended but payment is pending
+  const needsPayment = (booking.status === 'confirmed' || booking.status === 'accepted') &&
+                       (ride.rideStatus === 'PAYMENT_PENDING' || 
+                        ride.rideStatus === 'COMPLETED' || 
+                        ride.rideStatus === 'completed' ||
+                        (ride.rideStatus === 'in_progress' && ride.paymentStatus === 'PENDING')) &&
+                       (booking.paymentStatus === 'PENDING' || 
+                        booking.paymentStatus === 'pending' || 
+                        !booking.paymentStatus ||
+                        ride.paymentStatus === 'PENDING');
 
   return (
     <View style={[styles.container, style]}>
@@ -379,18 +418,33 @@ export function PassengerBookingCard({
 
       {/* Actions */}
       <View style={styles.actions}>
-        {booking.canCancel && booking.status === 'pending' && (
+        {needsPayment && (
           <TouchableOpacity
-            onPress={() => onCancel?.(booking.id)}
+            onPress={handlePay}
+            style={[styles.button, styles.payButton]}
+          >
+            <Ionicons name="qr-code" size={18} color="#fff" />
+            <Text style={styles.buttonText}>Scan QR to Pay {formatCurrency(totalPrice)}</Text>
+          </TouchableOpacity>
+        )}
+        {(booking.canCancel || booking.status === 'pending' || booking.status === 'confirmed') && 
+         booking.status !== 'cancelled' && 
+         booking.status !== 'completed' && 
+         ride.rideStatus !== 'in_progress' && 
+         ride.rideStatus !== 'completed' && (
+          <TouchableOpacity
+            onPress={() => onCancel?.(booking.id || booking._id)}
             style={[styles.button, styles.cancelButton]}
           >
             <Ionicons name="close-circle" size={18} color="#fff" />
-            <Text style={styles.buttonText}>Cancel Request</Text>
+            <Text style={styles.buttonText}>
+              {booking.status === 'pending' ? 'Cancel Request' : 'Cancel Booking'}
+            </Text>
           </TouchableOpacity>
         )}
         {booking.canRate && booking.status === 'completed' && (
           <TouchableOpacity
-            onPress={() => onRate?.(booking.id)}
+            onPress={() => onRate?.(booking.id || booking._id)}
             style={[styles.button, styles.rateButton]}
           >
             <Ionicons name="star" size={18} color="#fff" />
@@ -398,6 +452,16 @@ export function PassengerBookingCard({
           </TouchableOpacity>
         )}
       </View>
+
+      {/* QR Code Scanner Modal */}
+      <QRCodeScanner
+        visible={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onPaymentSuccess={() => {
+          // Payment success will trigger query invalidation via hook
+          setShowQRScanner(false);
+        }}
+      />
     </View>
   );
 }
@@ -698,6 +762,9 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: Colors.danger,
+  },
+  payButton: {
+    backgroundColor: Colors.success,
   },
   rateButton: {
     backgroundColor: Colors.primary,

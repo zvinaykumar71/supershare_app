@@ -1,6 +1,8 @@
 import { Colors } from '@/Constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserMode } from '@/hooks/useDriverActiveRide';
+import { useWalletBalance } from '@/hooks/useWallet';
+import { formatCurrency } from '@/utils/formatters';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -8,6 +10,8 @@ import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { mode, hasActiveRide, activeRide, showDriverFeatures, canOfferRide, isDriver } = useUserMode();
+  const { data: walletData } = useWalletBalance();
+  const walletBalance = walletData?.balance || 0;
 
   const handleLogout = async () => {
     await logout();
@@ -45,6 +49,15 @@ export default function ProfileScreen() {
           <Text style={styles.ratingText}>{displayRating}</Text>
           <Text style={styles.reviewCount}>({reviewCount} reviews)</Text>
         </View>
+        
+        {/* Wallet Balance */}
+        <TouchableOpacity 
+          style={styles.walletBalance}
+          onPress={() => router.push('/wallet')}
+        >
+          <Ionicons name="wallet" size={20} color={Colors.primary} />
+          <Text style={styles.walletBalanceText}>{formatCurrency(walletBalance)}</Text>
+        </TouchableOpacity>
         
         <View style={styles.stats}>
           {isDriver ? (
@@ -91,6 +104,15 @@ export default function ProfileScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
+        
+        <TouchableOpacity 
+          style={styles.menuItem}
+          onPress={() => router.push('/wallet')}
+        >
+          <Ionicons name="wallet-outline" size={24} color={Colors.text} />
+          <Text style={styles.menuText}>Wallet</Text>
+          <Ionicons name="chevron-forward" size={20} color={Colors.gray} />
+        </TouchableOpacity>
         
         <TouchableOpacity 
           style={styles.menuItem}
@@ -263,6 +285,21 @@ const styles = StyleSheet.create({
   reviewCount: {
     fontSize: 14,
     color: Colors.gray,
+  },
+  walletBalance: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.lightPrimary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  walletBalanceText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.primary,
   },
   stats: {
     flexDirection: 'row',

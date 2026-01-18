@@ -14,10 +14,20 @@ import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet
 import { useAuth } from '../../hooks/useAuth';
 import { useUserMode } from '../../hooks/useDriverActiveRide';
 
+// Import image specifically for Expo
+const HomeBgImage = require('@/assets/home-bg.png');
+
 export default function HomeScreen() {
   const { user } = useAuth();
   const { mode, canOfferRide, showDriverFeatures, hasActiveRide, activeRide, isLoading: isModeLoading, refetch: refetchMode } = useUserMode();
-  const { data: allRides = [], isLoading: isLoadingRides, refetch: refetchRides, isRefetching } = useAllRides();
+  const { data: allRidesRaw = [], isLoading: isLoadingRides, refetch: refetchRides, isRefetching } = useAllRides();
+
+  // Filter rides to show only CREATED (scheduled) and ONGOING (in_progress) status
+  // Exclude COMPLETED and CANCELLED rides
+  const allRides = allRidesRaw.filter((ride: any) => {
+    const status = ride.rideStatus || ride.status;
+    return status === 'scheduled' || status === 'in_progress' || status === 'CREATED' || status === 'ONGOING';
+  });
   const { data: passengerActiveRidesData, refetch: refetchPassengerRides } = usePassengerActiveRides();
   const [refreshing, setRefreshing] = useState(false);
   const [searchParams, setSearchParams] = useState({
@@ -29,20 +39,22 @@ export default function HomeScreen() {
 
   // Get ride ID for booking requests
   const rideId = activeRide?.id || activeRide?._id;
-  
+
   // Fetch booking requests for driver's active ride
   const { data: bookingRequestsData, isLoading: isLoadingRequests, refetch: refetchBookingRequests } = useRideBookingRequests(rideId || '');
-  
+
   // Booking actions
   const { mutate: acceptBooking, isPending: isAccepting } = useAcceptBooking();
   const { mutate: rejectBooking, isPending: isRejecting } = useRejectBooking();
   const { mutate: startRide, isPending: isStarting } = useStartRide();
 
   const passengerActiveRides = passengerActiveRidesData?.activeRides || [];
-  
+
   // Check if ride can be started - show button when there are booked seats
   const confirmedBookings = bookingRequestsData?.bookingRequests?.filter((b: any) => b.status === 'confirmed') || [];
-  const bookedSeats = bookingRequestsData?.rideDetails?.bookedSeats ?? 0;
+  // Calculate booked seats from confirmed bookings or from rideDetails
+  const bookedSeatsFromBookings = confirmedBookings.reduce((sum: number, b: any) => sum + (b.seats || 1), 0);
+  const bookedSeats = bookingRequestsData?.rideDetails?.bookedSeats ?? bookedSeatsFromBookings ?? 0;
   const canStartRide = showDriverFeatures && bookedSeats > 0 && activeRide?.rideStatus !== 'in_progress' && activeRide?.rideStatus !== 'completed';
   const isRideInProgress = activeRide?.rideStatus === 'in_progress';
 
@@ -59,19 +71,26 @@ export default function HomeScreen() {
     const booking = bookingRequestsData?.bookingRequests?.find((b: any) => b._id === bookingId || b.id === bookingId);
     const requestedSeats = booking?.seats || 1;
     const availableSeats = bookingRequestsData?.rideDetails?.availableSeats ?? activeRide?.availableSeats ?? 0;
-    
+
     if (availableSeats < requestedSeats) {
       Alert.alert("Cannot Accept", `Not enough seats. Requested: ${requestedSeats}, Available: ${availableSeats}`);
       return;
     }
-    
+
     Alert.alert("Accept Booking", `Accept booking for ${requestedSeats} seat(s)?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Accept",
         onPress: () => {
           (acceptBooking as any)(bookingId, {
-            onSuccess: () => Alert.alert("Success", "Booking accepted!"),
+            onSuccess: async () => {
+              // Refetch booking requests and active ride to get updated seat counts
+              await Promise.all([
+                refetchBookingRequests(),
+                refetchMode()
+              ]);
+              Alert.alert("Success", "Booking accepted!");
+            },
             onError: (error: any) => Alert.alert("Error", error.response?.data?.message || "Failed to accept")
           });
         }
@@ -134,66 +153,79 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing || isRefetching} onRefresh={onRefresh} />}
     >
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.greeting}>Hello{user?.name ? `, ${user.name}` : ''}</Text>
-          {/* Show different subtitle based on mode */}
-          {showDriverFeatures ? (
-            <Text style={styles.subtitle}>Manage your active ride</Text>
-          ) : (
-            <Text style={styles.subtitle}>Where are you going today?</Text>
-          )}
-          
-          {/* Show mode indicator for drivers */}
-          {user?.isDriver && (
-            <View style={styles.modeIndicator}>
-              <Ionicons 
-                name={showDriverFeatures ? "car" : "person"} 
-                size={14} 
-                color="#fff" 
-              />
-              <Text style={styles.modeText}>
-                {showDriverFeatures ? "Driver Mode" : "Passenger Mode"}
-              </Text>
-            </View>
-          )}
-          
-          {/* Show "Offer a ride" button only when driver has NO active ride */}
-          {canOfferRide && (
-            <View style={styles.headerButtonsContainer}>
-              <TouchableOpacity 
-                style={styles.headerButton}
-                onPress={() => router.push('/ride/create')}
-              >
-                <Ionicons name="add" size={18} color="#fff" />
-                <Text style={styles.headerButtonText}>Offer a ride</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          {/* Show active ride info when driver has active ride */}
-          {showDriverFeatures && activeRide && (
-            <View style={styles.headerButtonsContainer}>
-              <TouchableOpacity 
-                style={[styles.headerButton, styles.activeRideButton]}
-                onPress={() => router.push(`/ride/${activeRide.id || activeRide._id}`)}
-              >
-                <Ionicons name="car" size={18} color={Colors.primary} />
-                <Text style={styles.activeRideButtonText}>View Active Ride</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+      <View style={styles.headerContainer}>
+        <View style={styles.headerContent}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>Hello{user?.name ? `, ${user.name}` : ''}</Text>
+            {/* Show different subtitle based on mode */}
+            {showDriverFeatures ? (
+              <Text style={styles.subtitle}>Manage your active ride</Text>
+            ) : (
+              <Text style={styles.subtitle}>Where are you going today?</Text>
+            )}
+
+            {/* Show mode indicator for drivers */}
+            {user?.isDriver && (
+              <View style={styles.modeIndicator}>
+                <Ionicons
+                  name={showDriverFeatures ? "car" : "person"}
+                  size={14}
+                  color="#fff"
+                />
+                <Text style={styles.modeText}>
+                  {showDriverFeatures ? "Driver Mode" : "Passenger Mode"}
+                </Text>
+              </View>
+            )}
+
+            {/* Show "Offer a ride" button only when driver has NO active ride */}
+            {canOfferRide && (
+              <View style={styles.headerButtonsContainer}>
+                <TouchableOpacity
+                  style={styles.headerButton}
+                  onPress={() => router.push('/ride/create')}
+                >
+                  <Ionicons name="add" size={18} color="#fff" />
+                  <Text style={styles.headerButtonText}>Offer a ride</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Show active ride info when driver has active ride */}
+            {showDriverFeatures && activeRide && (
+              <View style={styles.headerButtonsContainer}>
+                <TouchableOpacity
+                  style={[styles.headerButton, styles.activeRideButton]}
+                  onPress={() => router.push(`/ride/${activeRide.id || activeRide._id}`)}
+                >
+                  <Ionicons name="car" size={18} color={Colors.primary} />
+                  <Text style={styles.activeRideButtonText}>View Active Ride</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+          <TouchableOpacity onPress={() => router.push('/profile')}>
+            <Image
+              source={{ uri: ((user as any)?.avatar) || 'https://picsum.photos/200' }}
+              style={styles.avatar}
+            />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => router.push('/profile')}>
-          <Image 
-            source={{ uri: ((user as any)?.avatar) || 'https://picsum.photos/200' }} 
-            style={styles.avatar}
-          />
-        </TouchableOpacity>
+
+        {/* Home Background Image - Now below content but part of header area */}
+        {!showDriverFeatures && (
+          <View style={styles.bannerContainer}>
+            <Image
+              source={HomeBgImage}
+              style={styles.bgImage}
+              resizeMode="cover"
+            />
+          </View>
+        )}
       </View>
 
       {/* Show search form only for passenger mode (not when driver has active ride) */}
@@ -207,22 +239,28 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Show passenger's active rides (confirmed bookings) */}
+      {/* Show passenger's active rides (confirmed bookings) - exclude completed/cancelled */}
       {!showDriverFeatures && passengerActiveRides.length > 0 && (
         <View style={styles.activeRidesSection}>
           <Text style={styles.activeRidesSectionTitle}>Your Active Rides</Text>
-          {passengerActiveRides.map((item: any) => (
-            <ActiveRideCard
-              key={item.booking._id}
-              ride={item.ride}
-              booking={item.booking}
-              tracking={item.tracking}
-              isDriver={false}
-            />
-          ))}
+          {passengerActiveRides
+            .filter((item: any) => {
+              const rideStatus = item.ride?.rideStatus || item.rideStatus;
+              return rideStatus !== 'completed' && rideStatus !== 'COMPLETED' &&
+                rideStatus !== 'cancelled' && rideStatus !== 'CANCELLED';
+            })
+            .map((item: any) => (
+              <ActiveRideCard
+                key={item.booking._id}
+                ride={item.ride}
+                booking={item.booking}
+                tracking={item.tracking}
+                isDriver={false}
+              />
+            ))}
         </View>
       )}
-      
+
       {/* Show active ride management section for drivers with active ride */}
       {showDriverFeatures && activeRide && (
         <View style={styles.activeRideContainer}>
@@ -234,19 +272,19 @@ export default function HomeScreen() {
                 <View style={styles.timelineLine} />
                 <View style={styles.timelineDot} />
               </View>
-              
+
               <View style={styles.routeDetails}>
                 <View style={styles.locationItem}>
                   <Text style={styles.timeText}>{formatTime(activeRide.departureTime)}</Text>
                   <Text style={styles.cityText}>{activeRide.from?.city || 'Origin'}</Text>
                   <Text style={styles.addressText}>{activeRide.from?.address}</Text>
                 </View>
-                
+
                 <View style={styles.durationRow}>
                   <Text style={styles.durationText}>{activeRide.duration || '1h 0m'}</Text>
                   <View style={styles.durationLine} />
                 </View>
-                
+
                 <View style={styles.locationItem}>
                   <Text style={styles.timeText}>{formatTime(activeRide.arrivalTime)}</Text>
                   <Text style={styles.cityText}>{activeRide.to?.city || 'Destination'}</Text>
@@ -254,9 +292,9 @@ export default function HomeScreen() {
                 </View>
               </View>
             </View>
-            
+
             <View style={styles.divider} />
-            
+
             <View style={styles.rideInfoRow}>
               <View style={styles.infoItem}>
                 <Ionicons name="calendar" size={18} color={Colors.gray} />
@@ -285,9 +323,9 @@ export default function HomeScreen() {
                 </View>
                 <Text style={styles.seatStatLabel}>Available</Text>
               </View>
-              
+
               <View style={styles.seatStatDivider} />
-              
+
               <View style={styles.seatStatItem}>
                 <View style={[styles.seatStatCircle, styles.bookedCircle]}>
                   <Text style={styles.seatStatNumber}>
@@ -296,9 +334,9 @@ export default function HomeScreen() {
                 </View>
                 <Text style={styles.seatStatLabel}>Booked</Text>
               </View>
-              
+
               <View style={styles.seatStatDivider} />
-              
+
               <View style={styles.seatStatItem}>
                 <View style={[styles.seatStatCircle, styles.pendingCircle]}>
                   <Text style={styles.seatStatNumber}>
@@ -307,9 +345,9 @@ export default function HomeScreen() {
                 </View>
                 <Text style={styles.seatStatLabel}>Pending</Text>
               </View>
-              
+
               <View style={styles.seatStatDivider} />
-              
+
               <View style={styles.seatStatItem}>
                 <View style={[styles.seatStatCircle, styles.totalCircle]}>
                   <Text style={styles.seatStatNumber}>
@@ -319,21 +357,21 @@ export default function HomeScreen() {
                 <Text style={styles.seatStatLabel}>Total</Text>
               </View>
             </View>
-            
+
             {/* Progress bar */}
             <View style={styles.seatProgressContainer}>
               <View style={styles.seatProgressBar}>
-                <View 
+                <View
                   style={[
-                    styles.seatProgressBooked, 
+                    styles.seatProgressBooked,
                     { width: `${((bookingRequestsData?.rideDetails?.bookedSeats ?? 0) / (activeRide?.totalSeats || 1)) * 100}%` }
-                  ]} 
+                  ]}
                 />
-                <View 
+                <View
                   style={[
-                    styles.seatProgressPending, 
+                    styles.seatProgressPending,
                     { width: `${((bookingRequestsData?.bookingRequests?.filter((b: any) => b.status === 'pending')?.reduce((sum: number, b: any) => sum + (b.seats || 1), 0) ?? 0) / (activeRide?.totalSeats || 1)) * 100}%` }
-                  ]} 
+                  ]}
                 />
               </View>
               <View style={styles.seatProgressLegend}>
@@ -363,7 +401,7 @@ export default function HomeScreen() {
                 </Text>
               </View>
             </View>
-            
+
             {isLoadingRequests ? (
               <View style={styles.loadingRequests}>
                 <ActivityIndicator size="small" color={Colors.primary} />
@@ -434,9 +472,9 @@ export default function HomeScreen() {
           ) : allRides.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
               {allRides.slice(0, 5).map((ride: any) => (
-                <RideCard 
-                  key={ride.id} 
-                  ride={ride} 
+                <RideCard
+                  key={ride.id}
+                  ride={ride}
                   style={styles.horizontalCard}
                   onPress={() => router.push(`/ride/${ride.id}`)}
                 />
@@ -458,18 +496,18 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>More rides</Text>
           </View>
-          
+
           {allRides.slice(5, 8).map((ride: any) => (
-            <RideCard 
-              key={ride.id} 
-              ride={ride} 
+            <RideCard
+              key={ride.id}
+              ride={ride}
               style={styles.verticalCard}
               onPress={() => router.push(`/ride/${ride.id}`)}
             />
           ))}
         </View>
       )}
-      
+
       {/* Show driver tips when in driver mode */}
       {showDriverFeatures && (
         <View style={styles.section}>
@@ -488,7 +526,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      
+
     </ScrollView>
   );
 }
@@ -498,32 +536,53 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
+  headerContainer: {
+    backgroundColor: Colors.primary,
+    paddingTop: 60, // increased for status bar
+    paddingBottom: 0,
+    overflow: 'hidden', // Ensure cleaner edges
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 50,
-    backgroundColor: Colors.primary,
+    alignItems: 'flex-start',
+    paddingHorizontal: 24, // standardized padding
+    paddingBottom: 24,
+    zIndex: 2,
   },
   greeting: {
-    fontSize: 20,
+    fontSize: 22, // slightly larger
     fontWeight: 'bold',
     color: 'white',
   },
   subtitle: {
     fontSize: 16,
     color: 'white',
-    opacity: 0.8,
+    opacity: 0.9,
+    marginTop: 4,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44, // slightly larger
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)', // add subtle border
+  },
+  bannerContainer: {
+    width: '100%',
+    height: 200, // increased height
+    marginTop: -10, // Slight overlap to blend if needed, or 0
+    backgroundColor: '#E6F5FF', // Fallback color matching sky
+    zIndex: 1,
+  },
+  bgImage: {
+    width: '100%',
+    height: '100%',
   },
   searchContainer: {
-    padding: 20,
-    marginTop: -20,
+    paddingHorizontal: 20,
+    marginTop: -90, // Increased overlap
+    zIndex: 3,
   },
   section: {
     padding: 20,

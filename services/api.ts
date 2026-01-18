@@ -48,10 +48,10 @@ const BASE_URL = resolveBaseUrl();
 
 console.log('API BASE URL =>', BASE_URL);
 
-// Create axios instance
+// Create axios instance with longer timeout for operations that may take time
 export const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,
+  timeout: 30000, // Increased to 30 seconds for slower networks/backends
   headers: {
     'Content-Type': 'application/json',
   },

@@ -33,10 +33,47 @@ export const useAllRides = () => {
 };
 
 export const useDriverRides = () => {
-  // Backend returns rides offered by the authenticated driver at GET /rides
+  // Get driver's own rides including completed ones
+  // Try getUserRides first (which calls /rides/my-rides), fallback to getAllRides
   return useQuery({
     queryKey: ['driver-rides'],
-    queryFn: () => rideService.getAllRides(),
+    queryFn: async () => {
+      try {
+        // First try the user-specific endpoint which should return driver's rides
+        const userRides = await rideService.getUserRides();
+        if (userRides && userRides.length > 0) {
+          console.log('✅ [useDriverRides] Got rides from getUserRides:', userRides.length);
+          return userRides;
+        }
+        // Fallback to getAllRides if getUserRides is empty
+        console.log('⚠️ [useDriverRides] getUserRides empty, trying getAllRides');
+        return await rideService.getAllRides({ includeCompleted: true, status: 'all' });
+      } catch (error: any) {
+        // Handle 404 or other errors gracefully
+        if (error.response?.status === 404) {
+          console.log('⚠️ [useDriverRides] /rides/my-rides endpoint not found (404), using getAllRides fallback');
+        } else {
+          console.error('❌ [useDriverRides] Error:', error.message || error);
+        }
+        // Fallback to getAllRides on error
+        try {
+          return await rideService.getAllRides({ includeCompleted: true, status: 'all' });
+        } catch (fallbackError: any) {
+          console.error('❌ [useDriverRides] Fallback also failed:', fallbackError.message || fallbackError);
+          return []; // Return empty array instead of throwing
+        }
+      }
+    },
+  });
+};
+
+/**
+ * Hook to get ride history (completed rides)
+ */
+export const useRideHistory = () => {
+  return useQuery({
+    queryKey: ['ride-history'],
+    queryFn: () => rideService.getRideHistory(),
   });
 };
 
@@ -49,7 +86,7 @@ export const useUserBookings = () => {
 
 export const useCreateRide = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (rideData: CreateRideData) => rideService.createRide(rideData),
     onSuccess: () => {
@@ -62,7 +99,7 @@ export const useBookRide = () => {
   return useMutation({
     mutationFn: ({ rideId, seats }: { rideId: string; seats: number }) => rideService.bookRide(rideId, seats),
   });
-  
+
 };
 
 
@@ -83,3 +120,21 @@ export const useCurrentRideRequests = () => {
     queryFn: () => rideService.getDriverCurrentRide(),
   });
 }
+
+export const useCancelRide = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (rideId: string) => rideService.cancelRide(rideId),
+    onSuccess: () => {
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ queryKey: ['ride'] });
+      queryClient.invalidateQueries({ queryKey: ['user-rides'] });
+      queryClient.invalidateQueries({ queryKey: ['driver-rides'] });
+      queryClient.invalidateQueries({ queryKey: ['current-ride-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['user-mode'] });
+      queryClient.invalidateQueries({ queryKey: ['ride-history'] });
+    },
+  });
+};
+
